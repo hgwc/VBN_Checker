@@ -92,3 +92,6 @@ extern	void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
                        void *                    p_context);
 extern	void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
                        void *                    p_context);
+extern	void saadc_init(void);
+extern	void saadc_sampling_event_init(void);
+extern	void saadc_sampling_event_enable(void);

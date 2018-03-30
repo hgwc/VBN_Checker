@@ -75,7 +75,7 @@ void data_len_ext_set(bool status)
 
 
 //180316 SAADC-S
-#define SAMPLES_IN_BUFFER         8		//원본 4
+#define SAMPLES_IN_BUFFER         6		//원본 4
 static const nrf_drv_timer_t   m_timer = NRF_DRV_TIMER_INSTANCE(3);
 static nrf_saadc_value_t       m_buffer_pool[2][SAMPLES_IN_BUFFER];
 static nrf_ppi_channel_t       m_ppi_channel;
@@ -168,17 +168,21 @@ void saadc_init(void)
 {
     ret_code_t err_code;
     nrf_saadc_channel_config_t channel_config0 =
-//        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
-		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(NRF_SAADC_INPUT_AIN0, NRF_SAADC_INPUT_AIN1);		//defferential로 변경
+        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);		//NO2_Sensor
+//		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(NRF_SAADC_INPUT_AIN0, NRF_SAADC_INPUT_AIN1);		//defferential로 변경
 
-    nrf_saadc_channel_config_t channel_config1 =
-		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(NRF_SAADC_INPUT_AIN2, NRF_SAADC_INPUT_AIN3);		//defferential로 변경
-	
+   nrf_saadc_channel_config_t channel_config2 =
+        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);		//NH3_Sensor
+   
+   nrf_saadc_channel_config_t channel_config3 =
+        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN3);   	//VOC_Sensor
+
     err_code = nrf_drv_saadc_init(NULL, saadc_callback);
     APP_ERROR_CHECK(err_code);
 
     err_code = nrf_drv_saadc_channel_init(0, &channel_config0);
-    err_code = nrf_drv_saadc_channel_init(2, &channel_config1);	
+    err_code = nrf_drv_saadc_channel_init(2, &channel_config2);	
+    err_code = nrf_drv_saadc_channel_init(3, &channel_config3);		
 	
     APP_ERROR_CHECK(err_code);
 
@@ -791,7 +795,7 @@ int main(void)
 //180316 SAADC-E
 	
     printf("\r\nUART Start!\r\n");
-    NRF_LOG_INFO("UART Start!");
+    NRF_LOG_INFO("Nordic Start!");
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
