@@ -49,92 +49,7 @@
  */
 
 
-
-#include <stdint.h>
-#include <string.h>
-#include "nordic_common.h"
-#include "nrf.h"
-#include "ble_hci.h"
-#include "nrf_drv_saadc.h"
-#include "nrf_drv_ppi.h"
-#include "nrf_drv_timer.h"
-#include "ble_advdata.h"
-#include "ble_advertising.h"
-#include "ble_conn_params.h"
-#include "nrf_sdh.h"
-#include "nrf_sdh_soc.h"
-#include "nrf_sdh_ble.h"
-#include "nrf_ble_gatt.h"
-#include "app_timer.h"
-#include "ble_nus.h"
-#include "app_uart.h"
-#include "app_util_platform.h"
-#include "bsp_btn_ble.h"
-		 
-#include "nrf_delay.h"		 
-
-#if defined (UART_PRESENT)
-#include "nrf_uart.h"
-#endif
-#if defined (UARTE_PRESENT)
-#include "nrf_uarte.h"
-#endif
-
-#include "nrf_log.h"
-#include "nrf_log_ctrl.h"
-#include "nrf_log_default_backends.h"
-
-#define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
-
-#define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
-
-#define DEVICE_NAME                     "Nordic_UART"                               /**< Name of device. Will be included in the advertising data. */
-#define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
-
-#define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
-
-#define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
-#define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
-
-#if 0				//속도를 높이기 위해 연결 간격을 BLE가 허용하는 최소로 줄임.....#if 0가 원본임
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
-#else
-#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
-#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
-#endif
-#define SLAVE_LATENCY                   0                                           /**< Slave latency. */
-#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
-#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(5000)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
-#define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
-#define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
-
-#define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
-
-#define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
-#define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
-
-#define NRF_BLE_GATT_MAX_MTU_SIZE		103			//원본에 업던 것을 추가함
-
-BLE_NUS_DEF(m_nus);                                                                 /**< BLE NUS service instance. */
-NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
-BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
-
-static void ble_stack_init(void);
-void gatt_init(void);
-static void advertising_init(void);
-
-static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
-static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
-																					//you have the m_ble_nus_max_data_len that is updated after ATT MTU exchange with the central.
-																					//In the function gatt_init() in main.c we are trying to increase the ATT MTU to 64.
-static ble_uuid_t m_adv_uuids[]          =                                          /**< Universally unique service identifier. */
-{
-    {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
-};
-
-//180321 Data Length Extension-S
-#define L2CAP_HDR_LEN                   4                                               /**< L2CAP header length. */
+#include "main.h"
 
 static void conn_evt_len_ext_set(bool status)
 {
@@ -158,51 +73,6 @@ void data_len_ext_set(bool status)
 }
 //180321 Data Length Extension-E
 
-//180315 SPI-S
-#include "nrf_drv_spi.h"
-#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
-#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
-static const nrf_drv_spi_t spi0 = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
-static const nrf_drv_spi_t spi1 = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
-static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-
-#define TEST_STRING "Nordic"
-static uint8_t       m_tx_buf[] = TEST_STRING;           /**< TX buffer. */
-static uint8_t       m_rx0_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static uint8_t       m_rx1_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static const uint8_t m_length = sizeof(m_tx_buf);        /**< Transfer length. */
-
-/**
- * @brief SPI user event handler.
- * @param event
- */
-void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
-                       void *                    p_context)
-{
-    spi0_xfer_done = true;
-
-//원본	NRF_LOG_INFO("SPI0_Transfer completed.");
-    if (m_rx0_buf[0] != 0)
-    {
-       NRF_LOG_INFO(" SPI0_Received:");
-        NRF_LOG_HEXDUMP_INFO(m_rx0_buf, strlen((const char *)m_rx0_buf));
-    }
-}
-
-void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
-                       void *                    p_context)
-{
-    spi1_xfer_done = true;
-
-//원본	NRF_LOG_INFO("SPI1_Transfer completed.");
-    if (m_rx1_buf[0] != 0)
-    {
-       NRF_LOG_INFO(" SPI1_Received:");
-        NRF_LOG_HEXDUMP_INFO(m_rx1_buf, strlen((const char *)m_rx1_buf));
-    }
-}
-//180315 SPI-E
 
 //180316 SAADC-S
 #define SAMPLES_IN_BUFFER         8		//원본 4
@@ -911,21 +781,7 @@ int main(void)
     conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
 	
-//180315 SPI-S
-    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi0_config.ss_pin   = SPI0_SS_PIN;
-    spi0_config.miso_pin = SPI0_MISO_PIN;
-    spi0_config.mosi_pin = SPI0_MOSI_PIN;
-    spi0_config.sck_pin  = SPI0_SCK_PIN;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0, &spi0_config, spi0_event_handler, NULL));
-	
-    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi1_config.ss_pin   = SPI1_SS0_PIN;
-    spi1_config.miso_pin = SPI1_MISO_PIN;
-    spi1_config.mosi_pin = SPI1_MOSI_PIN;
-    spi1_config.sck_pin  = SPI1_SCK_PIN;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1, &spi1_config, spi1_event_handler, NULL));	
-//180315 SPI-E
+	spi_init();
 
 //180316 SAADC-S
 //    NRF_LOG_INFO("SAADC HAL simple example.");
@@ -943,14 +799,14 @@ int main(void)
     {
 //180315 SPI-S			
         // Reset rx buffer and transfer done flag
-        memset(m_rx0_buf, 0, m_length);
-        memset(m_rx1_buf, 0, m_length);		
+        memset(m_rx0_buf, 0, m0_length);
+        memset(m_rx1_buf, 0, m0_length);		
 
         spi0_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0, m_tx_buf, m_length, m_rx0_buf, m_length));
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0, m_tx0_buf, m0_length, m_rx0_buf, m0_length));
 		
         spi1_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1, m_tx_buf, m_length, m_rx1_buf, m_length));		
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1, m_tx1_buf, m1_length, m_rx1_buf, m1_length));		
 
 		nrf_delay_ms(200);
 
