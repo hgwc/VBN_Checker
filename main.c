@@ -167,23 +167,38 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 void saadc_init(void)
 {
     ret_code_t err_code;
+#if 1
     nrf_saadc_channel_config_t channel_config0 =
         NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);		//NO2_Sensor
 //		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(NRF_SAADC_INPUT_AIN0, NRF_SAADC_INPUT_AIN1);		//defferential로 변경
 
+  nrf_saadc_channel_config_t channel_config2 =
+       NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);		//NH3_Sensor
+   
+  nrf_saadc_channel_config_t channel_config3 =
+		  NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN3);   	//VOC_Sensor
+   
+    err_code = nrf_drv_saadc_init(NULL, saadc_callback);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_saadc_channel_init(0, &channel_config0);
+   	err_code = nrf_drv_saadc_channel_init(2, &channel_config2);	
+   	err_code = nrf_drv_saadc_channel_init(3, &channel_config3);		   
+#else
+    nrf_saadc_channel_config_t channel_config0 =
+	//         NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);		//NO2_Sensor
+		NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_DIFFERENTIAL(NRF_SAADC_INPUT_AIN0, NRF_SAADC_INPUT_AIN1);		//defferential로 변경
+
    nrf_saadc_channel_config_t channel_config2 =
         NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);		//NH3_Sensor
    
-   nrf_saadc_channel_config_t channel_config3 =
-        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN3);   	//VOC_Sensor
-
     err_code = nrf_drv_saadc_init(NULL, saadc_callback);
     APP_ERROR_CHECK(err_code);
 
     err_code = nrf_drv_saadc_channel_init(0, &channel_config0);
     err_code = nrf_drv_saadc_channel_init(2, &channel_config2);	
-    err_code = nrf_drv_saadc_channel_init(3, &channel_config3);		
-	
+#endif
+
     APP_ERROR_CHECK(err_code);
 
     err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAMPLES_IN_BUFFER);
@@ -784,14 +799,16 @@ int main(void)
     data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
     conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
-	
+#if TEST	
 	spi_init();
-
+#endif
 //180316 SAADC-S
 //    NRF_LOG_INFO("SAADC HAL simple example.");
+
     saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
+
 //180316 SAADC-E
 	
     printf("\r\nUART Start!\r\n");
