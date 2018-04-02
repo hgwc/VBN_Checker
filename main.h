@@ -68,6 +68,12 @@
 
 #define NRF_BLE_GATT_MAX_MTU_SIZE		103			//원본에 업던 것을 추가함
 
+//제어용 GPIO 설정 -S(18.04.02)
+
+#define NO2_PREHEAT	3
+#define SHDN		22
+//제어용 GPIO 설정 -S(18.04.02)
+
 BLE_NUS_DEF(m_nus);                                                                 /**< BLE NUS service instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
 BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
