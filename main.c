@@ -99,7 +99,7 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* setup m_timer for compare event every 400ms */
-    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 400);
+    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 100);		//
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -119,6 +119,8 @@ void saadc_sampling_event_init(void)
                                           timer_compare_event_addr,
                                           saadc_sample_task_addr);
     APP_ERROR_CHECK(err_code);
+	
+	nrf_gpio_pin_write(NO2_PREHEAT, 1);
 }
 
 
@@ -131,6 +133,8 @@ void saadc_sampling_event_enable(void)
 
 void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 {
+	nrf_gpio_pin_write(NO2_PREHEAT, 0);
+	
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE)
     {
         ret_code_t err_code;
@@ -146,12 +150,17 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 
         for (i = 0; i < SAMPLES_IN_BUFFER; i++)
         {
-           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
+			adc_value = p_event->data.done.p_buffer[i];
+			if(p_event->data.done.p_buffer[i] & 0x8000)
+			{
+					p_event->data.done.p_buffer[i] = 0;		//180402 음수가 나오면 0으로 변경				
+			}
+				NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
 		}
 		bytes_to_send = sizeof(p_event->data.done.p_buffer[i]);
 						adc_value = p_event->data.done.p_buffer[i];
 						value[i*2] = adc_value;
-						value[(i*2)+1] = adc_value >> 8;		
+						value[(i*2)+1] = adc_value >> 8;
         do
 		{
 				err_code = ble_nus_string_send(&m_nus, value, &bytes_to_send);
@@ -162,6 +171,7 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         } while (err_code == NRF_ERROR_BUSY);			
         m_adc_evt_counter++;
     }
+		nrf_gpio_pin_write(NO2_PREHEAT, 1);
 }
 
 void saadc_init(void)
@@ -206,6 +216,8 @@ void saadc_init(void)
 
     err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[1], SAMPLES_IN_BUFFER);
     APP_ERROR_CHECK(err_code);
+//시험	
+	nrf_gpio_cfg_output(NO2_PREHEAT);		//GPIO 3번을 Output으로 설정
 
 }
 //180316 SAADC-E
@@ -810,6 +822,9 @@ int main(void)
     saadc_sampling_event_enable();
 
 //180316 SAADC-E
+
+	nrf_gpio_cfg_output(SHDN);		//SHDN을 계속 'High'로 설정
+	nrf_gpio_pin_write(SHDN, 1);
 	
     printf("\r\nUART Start!\r\n");
     NRF_LOG_INFO("Nordic Start!");
