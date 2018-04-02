@@ -73,6 +73,51 @@ void data_len_ext_set(bool status)
 }
 //180321 Data Length Extension-E
 
+//180315 SPI-S
+#include "nrf_drv_spi.h"
+#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
+#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
+static const nrf_drv_spi_t spi0 = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
+static const nrf_drv_spi_t spi1 = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
+static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+
+#define TEST_STRING "Nordic"
+static uint8_t       m_tx_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_rx0_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static uint8_t       m_rx1_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static const uint8_t m_length = sizeof(m_tx_buf);        /**< Transfer length. */
+
+/**
+ * @brief SPI user event handler.
+ * @param event
+ */
+void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
+                       void *                    p_context)
+{
+    spi0_xfer_done = true;
+
+	NRF_LOG_INFO("SPI0_Transfer completed.");
+    if (m_rx0_buf[0] != 0)
+    {
+       NRF_LOG_INFO(" SPI0_Received:");
+        NRF_LOG_HEXDUMP_INFO(m_rx0_buf, strlen((const char *)m_rx0_buf));
+    }
+}
+
+void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
+                       void *                    p_context)
+{
+    spi1_xfer_done = true;
+
+	NRF_LOG_INFO("SPI1_Transfer completed.");
+    if (m_rx1_buf[0] != 0)
+    {
+       NRF_LOG_INFO(" SPI1_Received:");
+        NRF_LOG_HEXDUMP_INFO(m_rx1_buf, strlen((const char *)m_rx1_buf));
+    }
+}
+//180315 SPI-E
 
 //180316 SAADC-S
 #define SAMPLES_IN_BUFFER         6		//원본 4
@@ -99,7 +144,7 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* setup m_timer for compare event every 400ms */
-    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 100);		//
+    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 100);
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -119,7 +164,7 @@ void saadc_sampling_event_init(void)
                                           timer_compare_event_addr,
                                           saadc_sample_task_addr);
     APP_ERROR_CHECK(err_code);
-	
+
 	nrf_gpio_pin_write(NO2_PREHEAT, 1);
 }
 
@@ -134,7 +179,6 @@ void saadc_sampling_event_enable(void)
 void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 {
 	nrf_gpio_pin_write(NO2_PREHEAT, 0);
-	
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE)
     {
         ret_code_t err_code;
@@ -150,17 +194,16 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 
         for (i = 0; i < SAMPLES_IN_BUFFER; i++)
         {
-			adc_value = p_event->data.done.p_buffer[i];
 			if(p_event->data.done.p_buffer[i] & 0x8000)
 			{
 					p_event->data.done.p_buffer[i] = 0;		//180402 음수가 나오면 0으로 변경				
 			}
-				NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
+           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
 		}
 		bytes_to_send = sizeof(p_event->data.done.p_buffer[i]);
 						adc_value = p_event->data.done.p_buffer[i];
 						value[i*2] = adc_value;
-						value[(i*2)+1] = adc_value >> 8;
+						value[(i*2)+1] = adc_value >> 8;		
         do
 		{
 				err_code = ble_nus_string_send(&m_nus, value, &bytes_to_send);
@@ -173,6 +216,7 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
     }
 		nrf_gpio_pin_write(NO2_PREHEAT, 1);
 }
+
 
 void saadc_init(void)
 {
@@ -811,23 +855,32 @@ int main(void)
     data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
     conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
-#if TEST	
-	spi_init();
-#endif
-//180316 SAADC-S
-//    NRF_LOG_INFO("SAADC HAL simple example.");
+	
+//180315 SPI-S
+    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi0_config.ss_pin   = SPI0_ADC_CS;
+    spi0_config.miso_pin = SPI0_ADC_DIN;
+    spi0_config.mosi_pin = SPI0_ADC_DOUT;
+    spi0_config.sck_pin  = SPI0_ADC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0, &spi0_config, spi0_event_handler, NULL));
+	
+    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi1_config.ss_pin   = SPI1_DAC_CS0;
+    spi1_config.miso_pin = SPI1_MISO_PIN;
+    spi1_config.mosi_pin = SPI1_DAC_SDI;
+    spi1_config.sck_pin  = SPI1_DAC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1, &spi1_config, spi1_event_handler, NULL));	
+//180315 SPI-E
 
+//180316 SAADC-S
+   NRF_LOG_INFO("SAADC HAL simple example.");
     saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
-
 //180316 SAADC-E
-
-	nrf_gpio_cfg_output(SHDN);		//SHDN을 계속 'High'로 설정
-	nrf_gpio_pin_write(SHDN, 1);
 	
     printf("\r\nUART Start!\r\n");
-    NRF_LOG_INFO("Nordic Start!");
+    NRF_LOG_INFO("UART Start!");
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
@@ -835,14 +888,14 @@ int main(void)
     {
 //180315 SPI-S			
         // Reset rx buffer and transfer done flag
-        memset(m_rx0_buf, 0, m0_length);
-        memset(m_rx1_buf, 0, m0_length);		
+        memset(m_rx0_buf, 0, m_length);
+        memset(m_rx1_buf, 0, m_length);		
 
         spi0_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0, m_tx0_buf, m0_length, m_rx0_buf, m0_length));
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0, m_tx_buf, m_length, m_rx0_buf, m_length));
 		
         spi1_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1, m_tx1_buf, m1_length, m_rx1_buf, m1_length));		
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1, m_tx_buf, m_length, m_rx1_buf, m_length));		
 
 		nrf_delay_ms(200);
 
