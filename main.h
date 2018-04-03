@@ -34,7 +34,7 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 		 
-#include "spi.h"		 
+#include "AD7190.h"		 
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
@@ -94,3 +94,85 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 //180321 Data Length Extension-S
 #define L2CAP_HDR_LEN                   4                                               /**< L2CAP header length. */
 
+//180315 SPI-S
+#include "nrf_drv_spi.h"
+#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
+#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
+const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
+const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
+static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+
+#define TEST_STRING "Nordic"
+uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
+uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
+static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
+//SPI-E
+
+//ADC7192-S
+#if 0
+/******************************************************************************/
+/*********************** Functions Declarations *******************************/
+/******************************************************************************/
+
+/*! Writes data into a register. */
+extern void AD7190_SetRegisterValue(unsigned char registerAddress,
+                             unsigned long registerValue,
+                             unsigned char bytesNumber,
+                             unsigned char modifyCS);
+
+/*! Reads the value of a register. */
+extern unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
+                                      unsigned char bytesNumber,
+                                      unsigned char modifyCS);
+
+/*! Checks if the AD7139 part is present. */
+extern unsigned char AD7190_Init(void);
+
+/*! Resets the device. */
+extern void AD7190_Reset(void);
+
+/*! Set device to idle or power-down. */
+extern void AD7190_SetPower(unsigned char pwrMode);
+
+extern void AD7190_SetBridgePower(unsigned char pwrMode);
+
+/*! Waits for RDY pin to go low. */
+extern void AD7190_WaitRdyGoLow(void);
+
+/*! Selects the channel to be enabled. */
+extern void AD7190_ChannelSelect(unsigned short channel);
+
+extern void AD7190_MultiChannelSelect(unsigned short chan1, unsigned short chan2);
+
+extern uint32_t AD7190_ChopEnable(unsigned char chop);
+
+extern void AD7190_RefDetEnable(unsigned char refdet);
+
+extern void AD7190_RefSelect(unsigned char refsel);
+
+extern void AD7190_BufEnable(unsigned char buf);
+
+extern void AD7190_Rej60Enable(unsigned char rej);
+
+extern void AD7190_DatSta_Enable(unsigned char datsta);
+
+
+/*! Performs the given calibration to the specified channel. */
+extern void AD7190_Calibrate(unsigned char mode, unsigned char channel);
+
+/*! Selects the polarity of the conversion and the ADC input range. */
+extern void AD7190_RangeSetup(unsigned char polarity, unsigned char range);
+
+/*! Returns the result of a single conversion. */
+extern unsigned long AD7190_SingleConversion(void);
+
+/*! Returns the average of several conversion results. */
+extern unsigned long AD7190_ContinuousReadAvg(unsigned char sampleNumber);
+
+/*! Read data from temperature sensor and converts it to Celsius degrees. */
+extern unsigned long AD7190_TemperatureRead(void);
+#endif

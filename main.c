@@ -73,23 +73,6 @@ void data_len_ext_set(bool status)
 }
 //180321 Data Length Extension-E
 
-//180315 SPI-S
-#include "nrf_drv_spi.h"
-#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
-#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
-static const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
-static const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
-static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-
-#define TEST_STRING "Nordic"
-static uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
-static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
-static uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
-static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
-
 /**
  * @brief SPI user event handler.
  * @param event
@@ -146,7 +129,7 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* setup m_timer for compare event every 400ms */
-    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 100);
+    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 5000);
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -860,14 +843,49 @@ void spi1_dac_cs1_init(void)
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
 }
 
+void ADC_reinit(void)
+{
+	unsigned long adcmd = 0;
+	if (AD7190_Init() == 0) {
+		NRF_LOG_INFO("ADC_reinit AD7190_Init Failed!\r\n");
+		return;
+	}
+	AD7190_SetBridgePower(1);
+	AD7190_SetPower(1);							  //idle
+	AD7190_ChannelSelect(AD7190_CH_AIN3P_AINCOM); //AIN3, COM
+	AD7190_ChopEnable(1);						  //chop enable
+	//AD7190_RefDetEnable(1); //REFDET enable
+	AD7190_RefSelect(0);
+	AD7190_BufEnable(1);
+	AD7190_DatSta_Enable(0);
+	AD7190_Rej60Enable(1); //rej 60
+	//AD7190_RangeSetup(0, (unsigned char)CurrGain); //bipolar, 128 gain
+	AD7190_RangeSetup(0, 8);
+//원본 	ADI_SYNC_LOW;
+	nrf_delay_us(10);
+//원본 	ADI_SYNC_HIGH;
+	adcmd = AD7190_MODE_SEL(AD7190_MODE_CONT) |
+	        AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
+	        AD7190_MODE_RATE(ConvRate);
+	AD7190_SetRegisterValue(AD7190_REG_MODE, adcmd, 3, 0); // CS is not modified.
+}
+
 void 	device_init(void)
 {
-//	uint16_t dac4 = ((voltage_value[10] - 32768) & 0xff00) >> 8;
-//	uint16_t dac5 = (voltage_value[10] - 32768) & 0xff;
+	m_tx_dac_buf[0] = 0x00;
+	m_tx_dac_buf[1]= ((voltage_value[10] - 32768) & 0xff00) >> 8;	
+	m_tx_dac_buf[2] = (voltage_value[10] - 32768) & 0xff;	
 //	uint16_t dac6[3] = {0x00, dac4, dac5};
 //	dac_datas(dac6);
-	nrf_drv_spi_uninit(&spi1_dac);	
+	
     spi1_dac_cs0_init();
+ 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+	
+	nrf_drv_spi_uninit(&spi1_dac);	
+    spi1_dac_cs1_init();	
+ 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+
+	ADC_reinit();
 }
 /**@brief Application main function.
  */
@@ -898,15 +916,16 @@ int main(void)
 //180321 DLE-E
 	
 //180315 SPI-S
-    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi0_config.ss_pin   = SPI0_ADC_CS;
-    spi0_config.miso_pin = SPI0_ADC_DIN;
-    spi0_config.mosi_pin = SPI0_ADC_DOUT;
-    spi0_config.sck_pin  = SPI0_ADC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
+//   nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+//    spi0_config.ss_pin   = SPI0_ADC_CS;
+//    spi0_config.miso_pin = SPI0_ADC_DIN;
+//    spi0_config.mosi_pin = SPI0_ADC_DOUT;
+//    spi0_config.sck_pin  = SPI0_ADC_SCLK;
+//    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
 	
-spi1_dac_cs0_init();
+//spi1_dac_cs0_init();
 //180315 SPI-E
+	device_init();	
 
 //180316 SAADC-S
    NRF_LOG_INFO("SAADC HAL simple example.");
@@ -923,8 +942,6 @@ spi1_dac_cs0_init();
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 	
-	device_init();
-
     while (1)
     {
 //180315 SPI-S			
@@ -935,10 +952,11 @@ spi1_dac_cs0_init();
         spi0_xfer_done = false;
         APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
 		
+		nrf_delay_ms(2000);
         spi1_xfer_done = false;
         APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
 
-		nrf_delay_ms(200);
+		nrf_delay_ms(2000);		//원본은 200 -> 2000으로 변경
 
 //180315 SPI-E
 

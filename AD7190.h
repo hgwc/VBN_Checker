@@ -47,8 +47,11 @@
 /***************************** Include Files **********************************/
 /******************************************************************************/
 //#include "Communication.h"
-#include "spi.h"
-
+//¿øº» #include "spi.h"
+#include "nrf_drv_spi.h"
+#include "nrf_delay.h"
+#include "nrf_log.h"
+#include "app_error.h"
 /******************************************************************************/
 /******************************** AD7190 **************************************/
 /******************************************************************************/
@@ -161,23 +164,23 @@
 #define AD7190_GPOCON_P0DAT     (1 << 0) // P0 state
 
 
-extern u16 ConvRate;
-extern u16 CurrGain;
+extern uint16_t ConvRate;
+extern uint16_t CurrGain;
 
 typedef struct{
 	float ro;
 	float span;
 	float ref;
-	u8		chop;
-	u8		samcnt;
-	u16		rate;
-	u32		max;
+	uint8_t		chop;
+	uint8_t		samcnt;
+	uint16_t		rate;
+	uint32_t		max;
 }AD7190_SetParam_type;
 
 typedef struct{
-	u32 	zero;
-	u32 	maxcal;
-	u32 	calstep[8];
+	uint32_t 	zero;
+	uint32_t 	maxcal;
+	uint32_t 	calstep[8];
 	float portion[8];
 }AD7190_CalParam_type;
 
@@ -215,7 +218,7 @@ void AD7190_ChannelSelect(unsigned short channel);
 
 void AD7190_MultiChannelSelect(unsigned short chan1, unsigned short chan2);
 
-u32 AD7190_ChopEnable(unsigned char chop);
+uint32_t AD7190_ChopEnable(unsigned char chop);
 
 void AD7190_RefDetEnable(unsigned char refdet);
 
@@ -248,19 +251,24 @@ void InitQueueTemp();
 
 void ClearQueueTemp();
 
-u32 PutAverQueTemp(u32 n);
+uint32_t PutAverQueTemp(uint32_t n);
 
-u32 PutAverQueTemp2(u32 n);
+uint32_t PutAverQueTemp2(uint32_t n);
 
-u32 PutAverQueAdc(u32 n);
+uint32_t PutAverQueAdc(uint32_t n);
 
-u32 PutAverQueAdc2(u32 n);
+uint32_t PutAverQueAdc2(uint32_t n);
 
 void InitQueueAdc();
 
 void ClearQueueAdc();
 
-u32 PutAverQueAdc(u32 n);
+uint32_t PutAverQueAdc(uint32_t n);
 
-
+extern const nrf_drv_spi_t spi0_adc;  /**< SPI instance. */
+extern	const nrf_drv_spi_t spi1_dac;  /**< SPI instance. */
+extern const uint8_t m_adc_length;        /**< Transfer length. */
+extern uint8_t       m_tx_adc_buf[];           /**< TX buffer. */
+extern uint8_t       m_rx_adc_buf[];           /**< RX buffer. */
+extern void spi0_event_handler(nrf_drv_spi_evt_t const * p_event, void * p_context);
 #endif /* __AD7190_H__ */

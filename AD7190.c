@@ -44,11 +44,11 @@
 /***************************** Include Files **********************************/
 /******************************************************************************/
 #include "AD7190.h"     // AD7190 definitions.
-#include "common.h"
+//Pawi #include "common.h"
 //#include "spi.h"       
 //#include "TIME.h"       // TIME definitions.
 
-u16 ConvRate = 0x60;
+uint16_t ConvRate = 0x60;
 
 /***************************************************************************//**
  * @brief Writes data into a register.
@@ -65,7 +65,7 @@ void AD7190_SetRegisterValue(unsigned char registerAddress,
                              unsigned char bytesNumber,
                              unsigned char modifyCS)
 {
-    u16 writeCommand[5] = {0, 0, 0, 0, 0};
+    uint16_t writeCommand[5] = {0, 0, 0, 0, 0};
     unsigned char* dataPointer    = (unsigned char*)&registerValue;
     unsigned char bytesNr         = bytesNumber;
     
@@ -77,9 +77,15 @@ void AD7190_SetRegisterValue(unsigned char registerAddress,
         dataPointer ++;
         bytesNr --;
     }
+	uint8_t value[10];
+	for(char i = 0; i < bytesNumber; i++)
+	{
+		value[i*2] = writeCommand[i];
+		value[(i*2)+1] = writeCommand[i] >> 8;
+	}
     //SPI_Write(AD7190_SLAVE_ID * modifyCS, writeCommand, bytesNumber + 1);
-		send_spi1_datas(bytesNumber + 1, writeCommand);
-		
+//		send_spi1_datas(bytesNumber + 1, writeCommand);
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, bytesNumber * 2, m_rx_adc_buf, m_adc_length));		
 }
 
 /***************************************************************************//**
@@ -97,16 +103,19 @@ unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
 {
     unsigned char registerWord[5] = {0, 0, 0, 0, 0}; 
     unsigned long buffer          = 0x0;
+	unsigned char temp[5]         = {0x0, };
     unsigned char i               = 0;
     
     registerWord[0] = AD7190_COMM_READ |
                       AD7190_COMM_ADDR(registerAddress);
+	
     //SPI_Read(AD7190_SLAVE_ID * modifyCS, registerWord, bytesNumber + 1);
-    read_spi_datas(registerWord, bytesNumber + 1);
-    
+//    read_spi_datas(registerWord, bytesNumber + 1);
+  	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerWord, 2, temp, bytesNumber + 1));   
     for(i = 1; i < bytesNumber + 1; i++) 
     {
-        buffer = (buffer << 8) + registerWord[i];
+//원본        buffer = (buffer << 8) + registerWord[i];
+        buffer = (buffer << 8) + temp[i];			
     }
     
     return buffer;
@@ -123,13 +132,21 @@ unsigned char AD7190_Init(void)
     unsigned char regVal = 0;
     
     //SPI_Init(0, 1000000, 1, 0);
-    init_spi1();
+//    init_spi1();
+//180315 SPI-S
+    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi0_config.ss_pin   = SPI0_ADC_CS;
+    spi0_config.miso_pin = SPI0_ADC_DIN;
+    spi0_config.mosi_pin = SPI0_ADC_DOUT;
+    spi0_config.sck_pin  = SPI0_ADC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
+//		
     AD7190_Reset();
     /* Allow at least 500 us before accessing any of the on-chip registers. */
     //TIME_DelayMs(1);
-    delay_ms(2);
+    nrf_delay_ms(2);
     regVal = AD7190_GetRegisterValue(AD7190_REG_ID, 1, 1);
-    //uart1_printf("ID: 0x%x\r\n",regVal);
+    //NRF_LOG_INFO("ID: 0x%x\r\n",regVal);
 #if 0    
     if( (regVal & AD7190_ID_MASK) != ID_AD7190)
     {
@@ -151,7 +168,7 @@ unsigned char AD7190_Init(void)
 *******************************************************************************/
 void AD7190_Reset(void)
 {
-    u16 registerWord[7];
+	uint16_t registerWord[7];
     
     registerWord[0] = 0x0001;
     registerWord[1] = 0x00FF;
@@ -162,7 +179,15 @@ void AD7190_Reset(void)
     registerWord[6] = 0x00FF;
     
     //SPI_Write(AD7190_SLAVE_ID, registerWord, 7);
-		send_spi1_datas(7, registerWord); 
+//		send_spi1_datas(7, registerWord); 
+
+	uint8_t value[14];
+	for(char i = 0; i < 7; i++)
+	{
+		value[i*2] = registerWord[i];
+		value[(i*2)+1] = registerWord[i] >> 8;
+	}	
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, 14, m_rx_adc_buf, m_adc_length));
 }
 
 /***************************************************************************//**
@@ -198,8 +223,8 @@ void AD7190_SetPower(unsigned char pwrMode)
 *******************************************************************************/
 void AD7190_SetBridgePower(unsigned char pwrMode)
 {
-     u8 oldPwrMode = 0x0;
-     u8 newPwrMode = 0x0; 
+     uint8_t oldPwrMode = 0x0;
+     uint8_t newPwrMode = 0x0; 
  
      oldPwrMode = AD7190_GetRegisterValue(AD7190_REG_GPOCON, 1, 1);
      oldPwrMode &= ~(AD7190_GPOCON_BPDSW);
@@ -210,7 +235,7 @@ void AD7190_SetBridgePower(unsigned char pwrMode)
      newPwrMode = 0x0;
      newPwrMode = AD7190_GetRegisterValue(AD7190_REG_GPOCON, 1, 1);
 
-     //uart1_printf("AD7190_SetBridgePower! 0x%02x\r\n",newPwrMode);
+     //NRF_LOG_INFO("AD7190_SetBridgePower! 0x%02x\r\n",newPwrMode);
 }
 
 /***************************************************************************//**
@@ -221,17 +246,17 @@ void AD7190_SetBridgePower(unsigned char pwrMode)
 void AD7190_WaitRdyGoLow(void)
 {
     unsigned long timeOutCnt = 0xFFFFF;
-    u16 i = 0;
+    uint16_t i = 0;
     
     while(timeOutCnt--)
     {
-    	if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6) == Bit_RESET)
+//원본    	if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6) == Bit_RESET)
     		i++;
     	if(i > 3)
     		break;
     }
     if(timeOutCnt <= 0)
-    	uart1_printf("AD Conversion timeout! %d\r\n",timeOutCnt);
+    	NRF_LOG_INFO("AD Conversion timeout! %d\r\n",timeOutCnt);
 }
 
 /***************************************************************************//**
@@ -269,7 +294,7 @@ void AD7190_MultiChannelSelect(unsigned short chan1, unsigned short chan2)
  *
  * @return none.
 *******************************************************************************/
-u32 AD7190_ChopEnable(unsigned char chop)
+uint32_t AD7190_ChopEnable(unsigned char chop)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
@@ -284,10 +309,10 @@ u32 AD7190_ChopEnable(unsigned char chop)
     
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     if((oldRegValue & AD7190_CONF_CHOP) && !chop)
-    	uart1_printf("Chop Disable Failed!******\r\n");
+    	NRF_LOG_INFO("Chop Disable Failed!******\r\n");
     	
     if(!(oldRegValue & AD7190_CONF_CHOP) && chop)
-    	uart1_printf("Chop Enable Failed!******\r\n"); 
+    	NRF_LOG_INFO("Chop Enable Failed!******\r\n"); 
 
     return (oldRegValue & AD7190_CONF_CHOP);
 }
@@ -459,7 +484,7 @@ unsigned long AD7190_ContinuousReadAvg(unsigned char sampleNumber)
     unsigned long samtemp = 0x0;
 
     if((sampleNumber < 4) && (sampleNumber > 1)){
-    	uart1_printf("Wrong Parameter! %d should be more than 3\r\n",sampleNumber);
+    	NRF_LOG_INFO("Wrong Parameter! %d should be more than 3\r\n",sampleNumber);
     	sampleNumber = 4;
     }
     	
@@ -532,25 +557,25 @@ unsigned long AD7190_TemperatureRead(void)
 #define MAX_AVER		(MAX_QUE-1)
 #define MAX_ROFF		5	
 
-u32	TEMP_QUEUE[MAX_QUE] = {0,};
-u32	TempAverage = 0;
-u32	ADC_QUEUE[MAX_QUE] = {0,};
-u32	AdcAverage = 0;
-//u8	U3_QUEUE[MAX_QUEUE];
-u32	HIGH_VALT[MAX_AVER] = {0,};
-u32	LOW_VALT[MAX_AVER] = {0,};
-u32	HIGH_VALA[MAX_AVER] = {0,};
-u32	LOW_VALA[MAX_AVER] = {0,};
+uint32_t	TEMP_QUEUE[MAX_QUE] = {0,};
+uint32_t	TempAverage = 0;
+uint32_t	ADC_QUEUE[MAX_QUE] = {0,};
+uint32_t	AdcAverage = 0;
+//uint8_t	U3_QUEUE[MAX_QUEUE];
+uint32_t	HIGH_VALT[MAX_AVER] = {0,};
+uint32_t	LOW_VALT[MAX_AVER] = {0,};
+uint32_t	HIGH_VALA[MAX_AVER] = {0,};
+uint32_t	LOW_VALA[MAX_AVER] = {0,};
 
-u8	HighIdx = 0;
-u8	LowIdx = 0;
-u8	HighIdxA = 0;
-u8	LowIdxA = 0;
+uint8_t	HighIdx = 0;
+uint8_t	LowIdx = 0;
+uint8_t	HighIdxA = 0;
+uint8_t	LowIdxA = 0;
 
 unsigned int frontt, reart;
 unsigned int fronta, reara;
 //unsigned int front3, rear3;
-extern u8	AverageStartF;
+extern uint8_t	AverageStartF;
 
 void InitQueueTemp()
 {
@@ -568,10 +593,10 @@ void ClearQueueTemp()
 	LowIdx = 0;	
 }
 
-u32 PutAverQueTemp(u32 n)
+uint32_t PutAverQueTemp(uint32_t n)
 {
-	u32 retval = 0;
-	u32 temp = 0;
+	uint32_t retval = 0;
+	uint32_t temp = 0;
 	
 	if((reart +1) % MAX_QUE != frontt)
 	//if(frontt != reart)
@@ -580,7 +605,7 @@ u32 PutAverQueTemp(u32 n)
 		TempAverage += n;
 		reart++;
 		reart %= MAX_QUE;
-		uart1_printf("*temperature: put only 0x%08x, %d\r\n",n,reart);
+		NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reart);
 		return 0;
 	}
 	else
@@ -597,20 +622,20 @@ u32 PutAverQueTemp(u32 n)
 		reart %= MAX_QUE;
 
 		retval = TempAverage/MAX_AVER;
-		uart1_printf("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
+		NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
 	}
 
 	return retval;
 }
 
-u32 PutAverQueTemp2(u32 n)
+uint32_t PutAverQueTemp2(uint32_t n)
 {
-	u32 retval = 0;
-	u32 temp = 0;
-	u8 i = 0;
+	uint32_t retval = 0;
+	uint32_t temp = 0;
+	uint8_t i = 0;
 	char x = 0;
-	u32 hightotal = 0;
-	u32 lowtotal = 0;	
+	uint32_t hightotal = 0;
+	uint32_t lowtotal = 0;	
 
 	if((reart +1) % MAX_QUE != frontt)
 	//if(frontt != reart)
@@ -620,7 +645,7 @@ u32 PutAverQueTemp2(u32 n)
 		reart++;
 		reart %= MAX_QUE;
 		
-		//uart1_printf("*temperature: put only 0x%08x, %d\r\n",n,reart);
+		//NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reart);
 		return n;
 	}
 	else
@@ -636,7 +661,7 @@ u32 PutAverQueTemp2(u32 n)
 		reart++;
 		reart %= MAX_QUE;
 
-		//u32 temp = 0;
+		//uint32_t temp = 0;
 		for(i=0; i<MAX_AVER; i++)
 		{
 			HIGH_VALT[i] = TEMP_QUEUE[(frontt+i)%MAX_QUE];
@@ -668,8 +693,8 @@ u32 PutAverQueTemp2(u32 n)
 				}
 			}
 		}
-	//uart1_printf("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
-	//uart1_printf("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
+	//NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
+	//NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
 
 		hightotal = HIGH_VALT[0]+HIGH_VALT[1]+HIGH_VALT[2]+HIGH_VALT[3]+HIGH_VALT[4];
 		lowtotal = LOW_VALT[0]+LOW_VALT[1]+LOW_VALT[2]+LOW_VALT[3]+LOW_VALT[4];
@@ -678,9 +703,9 @@ u32 PutAverQueTemp2(u32 n)
 		
 		if((AverageStartF & 2) == 0)
 			AverageStartF |= 2;
-		//uart1_printf("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
-		//uart1_printf("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
-		//uart1_printf("*temperature: retval 0x%08x, %d\r\n",retval,retval);
+		//NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
+		//NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
+		//NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
 	}
 
 	return retval;
@@ -702,10 +727,10 @@ void ClearQueueAdc()
 	LowIdxA = 0;	
 }
 
-u32 PutAverQueAdc(u32 n)
+uint32_t PutAverQueAdc(uint32_t n)
 {
-	u32 retval = 0;
-	u32 temp = 0;
+	uint32_t retval = 0;
+	uint32_t temp = 0;
 	
 	if((reara +1) % MAX_QUE != fronta)
 	//if(frontt != reart)
@@ -714,7 +739,7 @@ u32 PutAverQueAdc(u32 n)
 		AdcAverage += n;
 		reara++;
 		reara %= MAX_QUE;
-		uart1_printf("*temperature: put only 0x%08x, %d\r\n",n,reara);
+		NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reara);
 		return 0;
 	}
 	else
@@ -731,20 +756,20 @@ u32 PutAverQueAdc(u32 n)
 		reara %= MAX_QUE;
 
 		retval = AdcAverage/MAX_AVER;
-		uart1_printf("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,fronta);
+		NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,fronta);
 	}
 
 	return retval;
 }
 
-u32 PutAverQueAdc2(u32 n)
+uint32_t PutAverQueAdc2(uint32_t n)
 {
-	u32 retval = 0;
-	u32 temp = 0;
-	u8 i = 0;
+	uint32_t retval = 0;
+	uint32_t temp = 0;
+	uint8_t i = 0;
 	char x = 0;
-	u32 hightotal = 0;
-	u32 lowtotal = 0;	
+	uint32_t hightotal = 0;
+	uint32_t lowtotal = 0;	
 
 	if((reara +1) % MAX_QUE != fronta)
 	//if(frontt != reara)
@@ -754,7 +779,7 @@ u32 PutAverQueAdc2(u32 n)
 		reara++;
 		reara %= MAX_QUE;
 		
-		//uart1_printf("*temperature: put only 0x%08x, %d\r\n",n,reara);
+		//NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reara);
 		return n;
 	}
 	else
@@ -770,7 +795,7 @@ u32 PutAverQueAdc2(u32 n)
 		reara++;
 		reara %= MAX_QUE;
 
-		//u32 temp = 0;
+		//uint32_t temp = 0;
 		for(i=0; i<MAX_AVER; i++)
 		{
 			HIGH_VALA[i] = ADC_QUEUE[(fronta+i)%MAX_QUE];
@@ -802,8 +827,8 @@ u32 PutAverQueAdc2(u32 n)
 				}
 			}
 		}
-	//uart1_printf("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
-	//uart1_printf("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
+	//NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
+	//NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
 
 		hightotal = HIGH_VALA[0]+HIGH_VALA[1]+HIGH_VALA[2]+HIGH_VALA[3]+HIGH_VALA[4];
 		lowtotal = LOW_VALA[0]+LOW_VALA[1]+LOW_VALA[2]+LOW_VALA[3]+LOW_VALA[4];
@@ -812,9 +837,9 @@ u32 PutAverQueAdc2(u32 n)
 
 		if((AverageStartF & 1) == 0)
 			AverageStartF |= 1;
-		//uart1_printf("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
-		//uart1_printf("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,frontt);
-		//uart1_printf("*temperature: retval 0x%08x, %d\r\n",retval,retval);
+		//NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
+		//NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,frontt);
+		//NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
 	}
 
 	return retval;
