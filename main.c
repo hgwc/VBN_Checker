@@ -77,16 +77,18 @@ void data_len_ext_set(bool status)
 #include "nrf_drv_spi.h"
 #define SPI0_INSTANCE  0 /**< SPI0 instance index. */
 #define SPI1_INSTANCE  1 /**< SPI1 instance index. */
-static const nrf_drv_spi_t spi0 = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
-static const nrf_drv_spi_t spi1 = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
+static const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
+static const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
 static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
 static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
 
 #define TEST_STRING "Nordic"
-static uint8_t       m_tx_buf[] = TEST_STRING;           /**< TX buffer. */
-static uint8_t       m_rx0_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static uint8_t       m_rx1_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static const uint8_t m_length = sizeof(m_tx_buf);        /**< Transfer length. */
+static uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
+static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
 
 /**
  * @brief SPI user event handler.
@@ -98,10 +100,10 @@ void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
     spi0_xfer_done = true;
 
 	NRF_LOG_INFO("SPI0_Transfer completed.");
-    if (m_rx0_buf[0] != 0)
+    if (m_rx_adc_buf[0] != 0)
     {
        NRF_LOG_INFO(" SPI0_Received:");
-        NRF_LOG_HEXDUMP_INFO(m_rx0_buf, strlen((const char *)m_rx0_buf));
+        NRF_LOG_HEXDUMP_INFO(m_rx_adc_buf, strlen((const char *)m_rx_adc_buf));
     }
 }
 
@@ -111,10 +113,10 @@ void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
     spi1_xfer_done = true;
 
 	NRF_LOG_INFO("SPI1_Transfer completed.");
-    if (m_rx1_buf[0] != 0)
+    if (m_rx_dac_buf[0] != 0)
     {
        NRF_LOG_INFO(" SPI1_Received:");
-        NRF_LOG_HEXDUMP_INFO(m_rx1_buf, strlen((const char *)m_rx1_buf));
+        NRF_LOG_HEXDUMP_INFO(m_rx_dac_buf, strlen((const char *)m_rx_dac_buf));
     }
 }
 //180315 SPI-E
@@ -171,9 +173,11 @@ void saadc_sampling_event_init(void)
 
 void saadc_sampling_event_enable(void)
 {
+#if SAADC		
     ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
 
     APP_ERROR_CHECK(err_code);
+#endif	
 }
 
 void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
@@ -828,6 +832,43 @@ static void power_manage(void)
     APP_ERROR_CHECK(err_code);
 }
 
+uint16_t voltage_value[] = {
+	0, 2621, 5242, 7864, 10485, 13107, //0, 0.1, 0.2, 0.3, 0.4, 0.5
+	15728, 18350, 20971, 23592, 26214, //0.6, 0.7, 0.8, 0.9, 1.0
+	28835, 31457, 34078, 36700, 39321, //1.1, 1.2, 1.3, 1.4, 1.5
+	41943, 44564, 47185, 49807, 52428, //1.6, 1.7, 1.8, 1.9, 2.0
+	55050, 57671, 60293, 62914, 65535  //2.1, 2.2, 2.3, 2.4, 2.5
+};
+
+void spi1_dac_cs0_init(void)
+{
+    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi1_config.ss_pin   = SPI1_DAC_CS0;
+    spi1_config.miso_pin = SPI1_MISO_PIN;
+    spi1_config.mosi_pin = SPI1_DAC_SDI;
+    spi1_config.sck_pin  = SPI1_DAC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
+}
+
+void spi1_dac_cs1_init(void)
+{
+    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi1_config.ss_pin   = SPI1_DAC_CS1;
+    spi1_config.miso_pin = SPI1_MISO_PIN;
+    spi1_config.mosi_pin = SPI1_DAC_SDI;
+    spi1_config.sck_pin  = SPI1_DAC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
+}
+
+void 	device_init(void)
+{
+//	uint16_t dac4 = ((voltage_value[10] - 32768) & 0xff00) >> 8;
+//	uint16_t dac5 = (voltage_value[10] - 32768) & 0xff;
+//	uint16_t dac6[3] = {0x00, dac4, dac5};
+//	dac_datas(dac6);
+	nrf_drv_spi_uninit(&spi1_dac);	
+    spi1_dac_cs0_init();
+}
 /**@brief Application main function.
  */
 int main(void)
@@ -862,40 +903,40 @@ int main(void)
     spi0_config.miso_pin = SPI0_ADC_DIN;
     spi0_config.mosi_pin = SPI0_ADC_DOUT;
     spi0_config.sck_pin  = SPI0_ADC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0, &spi0_config, spi0_event_handler, NULL));
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
 	
-    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi1_config.ss_pin   = SPI1_DAC_CS0;
-    spi1_config.miso_pin = SPI1_MISO_PIN;
-    spi1_config.mosi_pin = SPI1_DAC_SDI;
-    spi1_config.sck_pin  = SPI1_DAC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1, &spi1_config, spi1_event_handler, NULL));	
+spi1_dac_cs0_init();
 //180315 SPI-E
 
 //180316 SAADC-S
    NRF_LOG_INFO("SAADC HAL simple example.");
-    saadc_init();
+ 
+#if SAADC  
+   saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
+#endif	
 //180316 SAADC-E
 	
     printf("\r\nUART Start!\r\n");
     NRF_LOG_INFO("UART Start!");
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
+	
+	device_init();
 
     while (1)
     {
 //180315 SPI-S			
         // Reset rx buffer and transfer done flag
-        memset(m_rx0_buf, 0, m_length);
-        memset(m_rx1_buf, 0, m_length);		
+        memset(m_rx_adc_buf, 0, m_adc_length);
+        memset(m_rx_dac_buf, 0, m_dac_length);		
 
         spi0_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0, m_tx_buf, m_length, m_rx0_buf, m_length));
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
 		
         spi1_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1, m_tx_buf, m_length, m_rx1_buf, m_length));		
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
 
 		nrf_delay_ms(200);
 

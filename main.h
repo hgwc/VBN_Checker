@@ -94,10 +94,3 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 //180321 Data Length Extension-S
 #define L2CAP_HDR_LEN                   4                                               /**< L2CAP header length. */
 
-extern	void spi_adc_event_handler(nrf_drv_spi_evt_t const * p_event,
-                       void *                    p_context);
-extern	void spi_dac_cs0_event_handler(nrf_drv_spi_evt_t const * p_event,
-                       void *                    p_context);
-extern	void saadc_init(void);
-extern	void saadc_sampling_event_init(void);
-extern	void saadc_sampling_event_enable(void);
