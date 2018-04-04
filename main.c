@@ -682,7 +682,7 @@ void uart_event_handle(app_uart_evt_t * p_event)
     switch (p_event->evt_type)
     {
         case APP_UART_DATA_READY:
-//원본            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
+           UNUSED_VARIABLE(app_uart_get(&data_array[index]));
             index++;
 
             if ((data_array[index - 1] == '\n') || (index >= (m_ble_nus_max_data_len)))
@@ -887,6 +887,248 @@ void 	device_init(void)
 
 	ADC_reinit();
 }
+
+#if 0
+void RcvCmd(void)
+{
+	uint8_t rxd1;
+//h 	char sign;
+	if (rx1_flag) {
+		rx1_flag = 0;
+		//rx3_enter--;
+		LCcmdok = 0;
+		LCcnt = 0;
+		LClen = 0;
+ 		uint8_t LChead = 0;
+//h 		uint8_t LCtail = 0;
+		//SerialPutChar1('[');
+		if (rx1_enter) {
+			//패킷이 정상적으로 들어오면 rx1_enter가 set되어진다
+			//rx1_enter--;
+			while ((rxd1 = GetByte1()) != 0xff) { //Queue가 끝나기 전까지 검사
+				//SerialPutChar1(rxd3);
+				if (rxd1 == 0x00) {
+					uart1_printf("*uart error 0x00\r\n");
+					LCcnt = 0;
+				}
+				switch (LCcnt) { //초기 LCcnt의 값은 0
+				case 0:
+					LChead = rxd1;
+					//LCid += (rxd1-'0') * 10;
+					//'0'은 asc2로 환산하면 0x30
+					// 1~9까지의 asc2는 0x31~0x39이므로
+					//0x30을 지우기 위하여 -'0'을 수행한다
+					//10의 자리수를 나타내기 위해 10을 곱한다
+					break;
+				case 1:
+					LCcmdStr[0] = rxd1; //명령어를 저장한다
+					break;
+				//LCid += rxd1-'0';
+				//break;
+				case 2:
+					LCcmdStr[1] = rxd1;
+					break;
+				case 3:
+					LCcmdStr[2] = rxd1;
+					break;
+				case 4:
+					LCcmdStr[3] = rxd1;
+					break;
+				default:
+					if (rxd1 == 'B') { //패킷의  Tail부분에 도달했으면
+						LCcmdok = 1;	 //LCcmdok를 1로 set해 패킷전송이 끝났음을 알린다
+						if (rx1_enter)   //패킷이 정상적으로 들어온것이 확인되면
+							rx1_enter--; //rxX_enter를 0으로 줄여 reset시킨다
+					}
+					else
+						LCresult[LClen++] = rxd1; //패킷의 Tail부분에 도달하지 않았으면
+					//LCresult배열에 패킷을 저장시킨다
+					//패킷의 data부분
+					break;
+				}
+				LCcnt++; //LCcnt를 1씩 증가시킨다
+				if (LCcnt >= 0xffff) {
+					uart1_printf("*LCcnt over %d\r\n", LCcnt);
+					LCcnt = 0;
+				}
+				if (LCcmdok) { //패킷전송이 완료되면
+					if ((strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) && (LClen == LCcmd_len[REQ_DACSET])) {
+						//LCcmdStr과 LCcommand를 서로 비교한다
+						//uart1_printf("*cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0; //if가 true라면 LCcmdok은 reset
+						LCcnt = 0;   //LCcnt도 reset된다
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRC], 4) == 0) && (LClen == LCcmd_len[REQ_DACRC])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) && (LClen == LCcmd_len[REQ_ADCSET])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					/*else if((strncmp(LCcmdStr,LCcommand[REQ_MAXSET],4) == 0) && (LClen == LCcmd_len[REQ_MAXSET]))
+					{
+						uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						PafiEventSet(EVENT_MAXSET);
+						//break;
+					}*/
+					else
+						LClen = 0; //if가 false라면 LClen을 0으로 초기화
+					//uart1_printf("cmd not ok! len:%d, %s\r\n",LClen, LCcmdStr);
+					//////////////////////////////////////////////////////////
+					LCcmdok = 0; //LCcmdok초기화
+					LCcnt = 0;   //LCcnt초기화
+					if (rx1_enter)
+						rx1_enter--; //rx3_enter초기화
+				}
+				if (LCcnt > 50)
+					uart1_printf("*LCcnt Overflow! %d, %s\r\n", LCcnt, LCcmdStr);
+			}
+			//SerialPutChar1(']');
+//h			uint16_t dac_value1 = 1;
+//h			uint16_t dac_value2 = 0;
+//h			uint16_t CRC7 = 0;
+			uint16_t CRC6 = 0;
+			uint16_t CRC5 = 0;
+			uint16_t CRC4 = 0;
+//h			uint16_t CRC3 = 0;
+//h			uint16_t CRC2 = 0;
+			uint16_t CRC1 = 0;
+			uint16_t CRC0 = 0;
+			uint16_t ADC_Value = 0;
+			if (strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) {
+				// voltage데이터 수신,data비교
+				DAC_Value = 0;
+				DAC_Value += (LCresult[0] - '0') * 10000;
+				DAC_Value += (LCresult[1] - '0') * 1000;
+				DAC_Value += (LCresult[2] - '0') * 100;
+				DAC_Value += (LCresult[3] - '0') * 10;
+				DAC_Value += (LCresult[4] - '0');
+				CRC0 += (LCresult[5] - '0') * 100;
+				CRC0 += (LCresult[6] - '0') * 10;
+				CRC0 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC1 += LCcmdStr[i];
+				}
+				if (CRC1 == CRC0) {
+					//uart1_printf("cmd OK\r\n");
+					DAC_Value = DAC_Value / 1000;
+					//DAC_Value = (int)(1000000*DAC_Value)/38.147;
+					//  uart1_printf("Setting_Voltage: %c.%c V\n\r",LCresult[0],LCresult[1]);
+					dac1 = ((voltage_value[DAC_Value] - 32768) & 0xff00) >> 8;
+					dac2 = (voltage_value[DAC_Value] - 32768) & 0xff;
+					uint16_t dac3[3] = {0x00, dac1, dac2};
+					dac_datas(dac3);
+					SendSetcmdResponse(REQ_DACSETRC, LCresult);
+					dac_value3 = LCresult[0];
+					dac_value4 = LCresult[1];
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			if (strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) {
+				// voltage데이터 수신,data비교
+				DAC_Value = 0;
+				DAC_Value += (LCresult[0] - '0') * 10000;
+				DAC_Value += (LCresult[1] - '0') * 1000;
+				DAC_Value += (LCresult[2] - '0') * 100;
+				DAC_Value += (LCresult[3] - '0') * 10;
+				DAC_Value += (LCresult[4] - '0');
+				if (DAC_Value != 65535) {
+					uart1_printf("packet error(data)\r\n");
+					rx1_enter = 0;
+				}
+				CRC4 += (LCresult[5] - '0') * 100;
+				CRC4 += (LCresult[6] - '0') * 10;
+				CRC4 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC5 += LCcmdStr[i];
+				}
+				if (CRC5 == CRC4) {
+					//uart1_printf("cmd OK\r\n");
+					SendReadcmdResponse(REQ_DACRC, dac_value3, dac_value4);
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			if (strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) {
+				// voltage데이터 수신,data비교
+				ADC_Value = 0;
+				ADC_Value += (LCresult[0] - '0') * 10000;
+				ADC_Value += (LCresult[1] - '0') * 1000;
+				ADC_Value += (LCresult[2] - '0') * 100;
+				ADC_Value += (LCresult[3] - '0') * 10;
+				ADC_Value += (LCresult[4] - '0');
+				if (ADC_Value > 2) {
+					uart1_printf("packet error(data)\r\n");
+					rx1_enter = 0;
+				}
+				CRC5 += (LCresult[5] - '0') * 100;
+				CRC5 += (LCresult[6] - '0') * 10;
+				CRC5 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC6 += LCcmdStr[i];
+				}
+				if (CRC6 == CRC5) {
+					//uart1_printf("cmd OK\r\n");
+					if (ADC_Value == 0) {
+						//uart1_printf("shunt resistor: 10m ohm\r\n");
+						while (1) {
+							SendADCmResponse(REQ_ADmST);
+							RcvCmd();
+						}
+					}
+					else if (ADC_Value == 1) {
+						//uart1_printf("shunt resistor: 10 ohm\r\n");
+						while (1) {
+							SendADCnResponse(REQ_ADnST);
+							RcvCmd();
+						}
+					}
+					else if (ADC_Value == 2) {
+						//uart1_printf("shunt resistor: 10K ohm\r\n");
+						while (1) {
+							SendADCKResponse(REQ_ADKST);
+							RcvCmd();
+						}
+					}
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			////////////////////////////////////////////////////////////////////////////////////
+			//uart1_printf("*TempValue: %d, %03.02f\r\n",TempValue, (float)((TempValue/100)+((TempValue%100)*0.01)));
+		}
+	}
+}
+#endif
+
 /**@brief Application main function.
  */
 int main(void)
@@ -898,7 +1140,7 @@ int main(void)
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
 
-//원본    uart_init();
+    uart_init();
     log_init();
 
 	buttons_leds_init(&erase_bonds);
@@ -928,7 +1170,7 @@ int main(void)
 	device_init();	
 
 //180316 SAADC-S
-   NRF_LOG_INFO("SAADC HAL simple example.");
+//   NRF_LOG_INFO("SAADC HAL simple example.");
  
 #if SAADC  
    saadc_init();
@@ -957,7 +1199,13 @@ int main(void)
         APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
 
 		nrf_delay_ms(2000);		//원본은 200 -> 2000으로 변경
-
+		
+    static uint8_t data_array[10] = "1234567890";
+	for(char i=0; i < 10; i++)
+	{			
+		app_uart_put(data_array[i]);
+	app_uart_get(&data_array[i]);
+	}
 //180315 SPI-E
 
         while (!spi0_xfer_done)
