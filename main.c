@@ -50,6 +50,69 @@
 
 
 #include "main.h"
+		 
+//180315 SPI-S
+#include "nrf_drv_spi.h"
+#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
+#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
+
+const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
+const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
+static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+
+#define TEST_STRING "Nordic"
+uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
+uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
+static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
+//SPI-E
+
+uint16_t DAC_Value = 10000;
+uint16_t dac1;
+uint16_t dac2;
+char dac_value3 = '1';
+char dac_value4 = '0';
+
+const uint8_t LCcmd_len[] = {
+	0, /* DARD */
+	0, /* DARC */
+	0, /* DAST */
+	0, /* DASR */
+	0, /* ADSE */
+	0, /* ADmS */
+	0, /* ADnS */
+	0, /* ADKS */
+	0, /* RSNO */
+	0, /* RCNO */
+	0, /* RPNO */
+	0, /* RTAR */
+	0, /* RCWT */
+	0, /* RSP1 */
+	0, /* RSP2 */
+	0, /* WTAR */
+	0, /* WTRS */
+	0, /* WZER */
+	6, /* WSNO */
+	2, /* WPNO */
+	6, /* WCNO */
+	0, /* WHOL */
+	0, /* WHRS */
+	0, /* WSTR */
+	0, /* WSTO */
+	6, /* WSP1 */
+	6, /* WSP2 */
+#if (WEIGHSCALE == CRWS100)
+	4, /* WDSP */
+	0, /* WDED */
+	0, /* WMAX */
+	6, /* ITEM */
+#endif
+	0 /*"" */
+};
+		 
 
 static void conn_evt_len_ext_set(bool status)
 {
@@ -80,14 +143,18 @@ void data_len_ext_set(bool status)
 void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
                        void *                    p_context)
 {
-    spi0_xfer_done = true;
-
-	NRF_LOG_INFO("SPI0_Transfer completed.");
-    if (m_rx_adc_buf[0] != 0)
-    {
-       NRF_LOG_INFO(" SPI0_Received:");
-        NRF_LOG_HEXDUMP_INFO(m_rx_adc_buf, strlen((const char *)m_rx_adc_buf));
-    }
+    if(p_event -> type == NRF_DRV_SPI_EVENT_DONE)
+	{
+		spi0_xfer_done = true;
+		NRF_LOG_INFO("SPI0_Transfer completed.");
+    	if (m_rx_adc_buf[0] != 0)
+    	{
+       		NRF_LOG_INFO(" SPI0_Received:");
+        	NRF_LOG_HEXDUMP_INFO(m_rx_adc_buf, strlen((const char *)m_rx_adc_buf));
+   	 	}
+	}
+	else
+			uart1_printf("SPI Error\n");
 }
 
 void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
@@ -847,8 +914,13 @@ void ADC_reinit(void)
 {
 	unsigned long adcmd = 0;
 	if (AD7190_Init() == 0) {
+#if NRF_LOG_USED
 		NRF_LOG_INFO("ADC_reinit AD7190_Init Failed!\r\n");
+		return;		
+#else
+		uart1_printf("ADC_reinit AD7190_Init Failed!\r\n");
 		return;
+#endif
 	}
 	AD7190_SetBridgePower(1);
 	AD7190_SetPower(1);							  //idle
@@ -888,7 +960,267 @@ void 	device_init(void)
 	ADC_reinit();
 }
 
-#if 0
+#define LCSTR_LEN 20
+
+uint16_t LCcnt = 0;
+uint16_t LCid = 0;
+char LCcmdStr[4];
+char LCresult[LCSTR_LEN];
+
+//char LCresult1[LCSTR_LEN];
+uint8_t LCcmdok = 0;
+uint16_t LClen = 0;
+
+
+bt_cmd_fet_t func_arry[REQ_CMDMAX] = {
+	{	REQ_DACRD, func_cmd_DARD},
+	{	REQ_DACRC, func_cmd_DARC},
+	{	REQ_DACSET, func_cmd_DAST},
+	{	REQ_DACSETRC, func_cmd_DASR},
+	{	REQ_ADCSET, func_cmd_ADSE},
+	{	REQ_ADmST, func_cmd_ADmS},
+	{	REQ_ADnST, func_cmd_ADnS},
+	{	REQ_ADKST, func_cmd_ADKS},
+	{	REQ_NO, NULL},
+	{	REQ_CODE, NULL},
+	{	REQ_QN, NULL},
+	{	REQ_CONTAINER, NULL},
+	{	REQ_WEIGHT, NULL},
+	{	REQ_READMIN, NULL},
+	{	REQ_READMAX, NULL},
+	{	REQ_CONTSET, NULL},
+	{	REQ_CONTRST, NULL},
+	{	REQ_ZEROSET, NULL},
+	{	REQ_CHGNO, NULL},
+	{	REQ_CHGQN, NULL},
+	{	REQ_CHGCODE, NULL},
+	{	REQ_SETHOLD, NULL},
+	{	REQ_RELHOLD, NULL},
+	{	REQ_START, NULL},
+	{	REQ_STOP, NULL},
+	{	REQ_CHGMIN, NULL},
+	{	REQ_CHGMAX, NULL},
+#if (WEIGHSCALE == CRWS100)
+	{	REQ_DISP, NULL},
+	{	REQ_DEND, NULL},
+	{	REQ_MAXSET, NULL},
+	{	INF_TEMP, NULL},
+#endif
+};
+
+const char *LCcommand[] = {
+	"DARD",
+	"DARC",
+	"DAST",
+	"DASR",
+	"ADSE",
+	"ADmS",
+	"ADnS",
+	"ADKS"
+	"RSNO",
+	"RCNO",
+	"RPNO",
+	"RTAR",
+	"RCWT",
+	"RSP1",
+	"RSP2",
+	"WTAR",
+	"WTRS",
+	"WZER",
+	"WSNO",
+	"WPNO",
+	"WCNO",
+	"WHOL",
+	"WHRS",
+	"WSTR",
+	"WSTO",
+	"WSP1",
+	"WSP2",
+#if (WEIGHSCALE == CRWS100)
+	"WDSP",
+	"WDED",
+	"WMAX",
+	"ITEM",
+#endif
+	""
+};
+
+void SendADCmResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 0x813500) / 0x7eaf00)) + 0.051 - 0.0009;
+//h 	I = (tmpData2 / 1.8) / (0.01 * 100) * 1000;
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000);
+	//uart1_printf("i: %f mA\r\n",I);
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendADCnResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 8404000)) / 8365900) + 0.012; //10
+	//tmpData2 = ((5*(tmpData1-0x813500)/0x7eaf00))+0.012; //10
+//h 	I = (tmpData2 * 1.98) / (10 * 100) * 1000; //10
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10
+	//uart1_printf("i: %f mA\r\n",I); //10
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendADCKResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 0x813500)) / 0x7eaf00) + 0.050; //10k
+//h 	I = tmpData2 / (10000 * 100) * 10000000;					 //10k
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10k
+	//uart1_printf("i: %f uA\r\n",I); //10k
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendSetcmdResponse(LCcmd_e_type cmd, char *val)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, j = 0, k = 0;
+	uint16_t crc3 = 0;
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	for (j = 0; j < 5; j++) {
+		sendstr[i++] = *val++;
+	}
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	nrf_delay_ms(8);
+}
+
+void SendReadcmdResponse(LCcmd_e_type cmd, char val1, char val2)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = val1;
+	sendstr[i++] = val2;
+	sendstr[i++] = '0';
+	sendstr[i++] = '0';
+	sendstr[i++] = '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	//uart1_printf("\rdac voltage= %c.%c V\r\n",val1,val2);
+	nrf_delay_ms(8);
+}
+
 void RcvCmd(void)
 {
 	uint8_t rxd1;
@@ -899,7 +1231,7 @@ void RcvCmd(void)
 		LCcmdok = 0;
 		LCcnt = 0;
 		LClen = 0;
- 		uint8_t LChead = 0;
+		
 //h 		uint8_t LCtail = 0;
 		//SerialPutChar1('[');
 		if (rx1_enter) {
@@ -913,7 +1245,6 @@ void RcvCmd(void)
 				}
 				switch (LCcnt) { //초기 LCcnt의 값은 0
 				case 0:
-					LChead = rxd1;
 					//LCid += (rxd1-'0') * 10;
 					//'0'은 asc2로 환산하면 0x30
 					// 1~9까지의 asc2는 0x31~0x39이므로
@@ -1041,7 +1372,17 @@ void RcvCmd(void)
 					dac1 = ((voltage_value[DAC_Value] - 32768) & 0xff00) >> 8;
 					dac2 = (voltage_value[DAC_Value] - 32768) & 0xff;
 					uint16_t dac3[3] = {0x00, dac1, dac2};
-					dac_datas(dac3);
+//					dac_datas(dac3);
+   					spi1_dac_cs0_init();
+					uint8_t value[6];
+					uint8_t rcv_value[6];
+					for(char i = 0; i < 3; i++)
+					{
+						value[i*2] = dac3[i];
+						value[(i*2)+1] = dac3[i] >> 8;
+					}	
+ 					APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, value, 6, rcv_value, 7));
+	
 					SendSetcmdResponse(REQ_DACSETRC, LCresult);
 					dac_value3 = LCresult[0];
 					dac_value4 = LCresult[1];
@@ -1127,7 +1468,7 @@ void RcvCmd(void)
 		}
 	}
 }
-#endif
+
 
 /**@brief Application main function.
  */
@@ -1179,8 +1520,9 @@ int main(void)
 #endif	
 //180316 SAADC-E
 	
-    printf("\r\nUART Start!\r\n");
-    NRF_LOG_INFO("UART Start!");
+    uart1_printf("\r\nUART Start! - uart1\r\n");
+	printf("\r\nUART Start! - printf\r\n");
+    NRF_LOG_INFO("UART Start! - NRF");
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 	
@@ -1191,27 +1533,21 @@ int main(void)
         memset(m_rx_adc_buf, 0, m_adc_length);
         memset(m_rx_dac_buf, 0, m_dac_length);		
 
-        spi0_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
+//        spi0_xfer_done = false;
+//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
 		
-		nrf_delay_ms(2000);
-        spi1_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
+//		nrf_delay_ms(2000);
+//        spi1_xfer_done = false;
+//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
 
-		nrf_delay_ms(2000);		//원본은 200 -> 2000으로 변경
-		
-    static uint8_t data_array[10] = "1234567890";
-	for(char i=0; i < 10; i++)
-	{			
-		app_uart_put(data_array[i]);
-	app_uart_get(&data_array[i]);
-	}
+//		nrf_delay_ms(2000);		//원본은 200 -> 2000으로 변경
+
 //180315 SPI-E
 
-        while (!spi0_xfer_done)
-        {
-            __WFE();
-        }
+//        while (!spi0_xfer_done)
+//        {
+//            __WFE();
+//        }
 
         NRF_LOG_FLUSH();
 
