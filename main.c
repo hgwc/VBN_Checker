@@ -49,70 +49,97 @@
  */
 
 
-#include "main.h"
+
+#include <stdint.h>
+#include <string.h>
+#include "nordic_common.h"
+#include "nrf.h"
+#include "ble_hci.h"
+#include "nrf_drv_saadc.h"
+#include "nrf_drv_ppi.h"
+#include "nrf_drv_timer.h"
+#include "ble_advdata.h"
+#include "ble_advertising.h"
+#include "ble_conn_params.h"
+#include "nrf_sdh.h"
+#include "nrf_sdh_soc.h"
+#include "nrf_sdh_ble.h"
+#include "nrf_ble_gatt.h"
+#include "app_timer.h"
+#include "ble_nus.h"
+#include "app_uart.h"
+#include "app_util_platform.h"
+#include "bsp_btn_ble.h"
 		 
-//180315 SPI-S
-#include "nrf_drv_spi.h"
-#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
-#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
+#include "nrf_delay.h"		 
 
-const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
-const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
-static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
-
-#define TEST_STRING "Nordic"
-uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
-static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
-uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
-const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
-static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
-//SPI-E
-
-uint16_t DAC_Value = 10000;
-uint16_t dac1;
-uint16_t dac2;
-char dac_value3 = '1';
-char dac_value4 = '0';
-
-const uint8_t LCcmd_len[] = {
-	0, /* DARD */
-	0, /* DARC */
-	0, /* DAST */
-	0, /* DASR */
-	0, /* ADSE */
-	0, /* ADmS */
-	0, /* ADnS */
-	0, /* ADKS */
-	0, /* RSNO */
-	0, /* RCNO */
-	0, /* RPNO */
-	0, /* RTAR */
-	0, /* RCWT */
-	0, /* RSP1 */
-	0, /* RSP2 */
-	0, /* WTAR */
-	0, /* WTRS */
-	0, /* WZER */
-	6, /* WSNO */
-	2, /* WPNO */
-	6, /* WCNO */
-	0, /* WHOL */
-	0, /* WHRS */
-	0, /* WSTR */
-	0, /* WSTO */
-	6, /* WSP1 */
-	6, /* WSP2 */
-#if (WEIGHSCALE == CRWS100)
-	4, /* WDSP */
-	0, /* WDED */
-	0, /* WMAX */
-	6, /* ITEM */
+#if defined (UART_PRESENT)
+#include "nrf_uart.h"
 #endif
-	0 /*"" */
+#if defined (UARTE_PRESENT)
+#include "nrf_uarte.h"
+#endif
+
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+
+#define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
+
+#define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
+
+#define DEVICE_NAME                     "Nordic_UART"                               /**< Name of device. Will be included in the advertising data. */
+#define NUS_SERVICE_UUID_TYPE           BLE_UUID_TYPE_VENDOR_BEGIN                  /**< UUID type for the Nordic UART Service (vendor specific). */
+
+#define APP_BLE_OBSERVER_PRIO           3                                           /**< Application's BLE observer priority. You shouldn't need to modify this value. */
+
+#define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms. This value corresponds to 40 ms). */
+#define APP_ADV_TIMEOUT_IN_SECONDS      180                                         /**< The advertising timeout (in units of seconds). */
+
+#if 0				//속도를 높이기 위해 연결 간격을 BLE가 허용하는 최소로 줄임.....#if 0가 원본임
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(75, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
+#else
+#define MIN_CONN_INTERVAL               MSEC_TO_UNITS(7.5, UNIT_1_25_MS)             /**< Minimum acceptable connection interval (20 ms), Connection interval uses 1.25 ms units. */
+#define MAX_CONN_INTERVAL               MSEC_TO_UNITS(20, UNIT_1_25_MS)             /**< Maximum acceptable connection interval (75 ms), Connection interval uses 1.25 ms units. */
+#endif
+#define SLAVE_LATENCY                   0                                           /**< Slave latency. */
+#define CONN_SUP_TIMEOUT                MSEC_TO_UNITS(4000, UNIT_10_MS)             /**< Connection supervisory timeout (4 seconds), Supervision Timeout uses 10 ms units. */
+#define FIRST_CONN_PARAMS_UPDATE_DELAY  APP_TIMER_TICKS(200)                       /**< Time from initiating event (connect or start of notification) to first time sd_ble_gap_conn_param_update is called (5 seconds). */
+#define NEXT_CONN_PARAMS_UPDATE_DELAY   APP_TIMER_TICKS(30000)                      /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
+#define MAX_CONN_PARAMS_UPDATE_COUNT    3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
+
+#define DEAD_BEEF                       0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
+
+#define UART_TX_BUF_SIZE                256                                         /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE                256                                         /**< UART RX buffer size. */
+
+#define NRF_BLE_GATT_MAX_MTU_SIZE		103			//원본에 업던 것을 추가함
+
+//제어용 GPIO 설정 -S(18.04.02)
+#define NO2_PREHEAT	3
+#define SHDN		22
+//제어용 GPIO 설정 -S(18.04.02)
+
+BLE_NUS_DEF(m_nus);                                                                 /**< BLE NUS service instance. */
+NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
+BLE_ADVERTISING_DEF(m_advertising);                                                 /**< Advertising module instance. */
+
+static void ble_stack_init(void);
+void gatt_init(void);
+static void advertising_init(void);
+
+static uint16_t   m_conn_handle          = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
+static uint16_t   m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
+																					//you have the m_ble_nus_max_data_len that is updated after ATT MTU exchange with the central.
+																					//In the function gatt_init() in main.c we are trying to increase the ATT MTU to 64.
+static ble_uuid_t m_adv_uuids[]          =                                          /**< Universally unique service identifier. */
+{
+    {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
 };
-		 
+
+//180321 Data Length Extension-S
+#define L2CAP_HDR_LEN                   4                                               /**< L2CAP header length. */
 
 static void conn_evt_len_ext_set(bool status)
 {
@@ -136,6 +163,23 @@ void data_len_ext_set(bool status)
 }
 //180321 Data Length Extension-E
 
+//180315 SPI-S
+#include "nrf_drv_spi.h"
+#define SPI0_INSTANCE  0 /**< SPI0 instance index. */
+#define SPI1_INSTANCE  1 /**< SPI1 instance index. */
+const nrf_drv_spi_t spi0_adc = NRF_DRV_SPI_INSTANCE(SPI0_INSTANCE);  /**< SPI instance. */
+const nrf_drv_spi_t spi1_dac = NRF_DRV_SPI_INSTANCE(SPI1_INSTANCE);  /**< SPI instance. */
+static volatile bool spi0_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+static volatile bool spi1_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+
+#define TEST_STRING "Nordic"
+uint8_t       m_tx_adc_buf[] = TEST_STRING;           /**< TX buffer. */
+static uint8_t       m_tx_dac_buf[] = TEST_STRING;           /**< TX buffer. */
+uint8_t       m_rx_adc_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+static uint8_t       m_rx_dac_buf[sizeof(TEST_STRING) + 1];    /**< RX buffer. */
+const uint8_t m_adc_length = sizeof(m_tx_adc_buf);        /**< Transfer length. */
+static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer length. */
+
 /**
  * @brief SPI user event handler.
  * @param event
@@ -154,7 +198,7 @@ void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
    	 	}
 	}
 	else
-			uart1_printf("SPI Error\n");
+		NRF_LOG_INFO("SPI Error\n");
 }
 
 void spi1_event_handler(nrf_drv_spi_evt_t const * p_event,
@@ -196,7 +240,7 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* setup m_timer for compare event every 400ms */
-    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 5000);
+    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 200);
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -223,11 +267,9 @@ void saadc_sampling_event_init(void)
 
 void saadc_sampling_event_enable(void)
 {
-#if SAADC		
     ret_code_t err_code = nrf_drv_ppi_channel_enable(m_ppi_channel);
 
     APP_ERROR_CHECK(err_code);
-#endif	
 }
 
 void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
@@ -261,6 +303,11 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
         do
 		{
 				err_code = ble_nus_string_send(&m_nus, value, &bytes_to_send);
+				if(err_code == 13313)
+				{
+    				err_code = sd_ble_gatts_sys_attr_set(m_conn_handle, NULL, 0, 0);
+					APP_ERROR_CHECK(err_code);
+				}							
                 if ( (err_code != NRF_ERROR_INVALID_STATE) && (err_code != NRF_ERROR_BUSY) )
                 {
 						APP_ERROR_CHECK(err_code);					
@@ -749,7 +796,7 @@ void uart_event_handle(app_uart_evt_t * p_event)
     switch (p_event->evt_type)
     {
         case APP_UART_DATA_READY:
-           UNUSED_VARIABLE(app_uart_get(&data_array[index]));
+//원본            UNUSED_VARIABLE(app_uart_get(&data_array[index]));
             index++;
 
             if ((data_array[index - 1] == '\n') || (index >= (m_ble_nus_max_data_len)))
@@ -894,7 +941,7 @@ void spi1_dac_cs0_init(void)
 {
     nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
     spi1_config.ss_pin   = SPI1_DAC_CS0;
-    spi1_config.miso_pin = SPI1_MISO_PIN;
+    spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
     spi1_config.mosi_pin = SPI1_DAC_SDI;
     spi1_config.sck_pin  = SPI1_DAC_SCLK;
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
@@ -904,42 +951,10 @@ void spi1_dac_cs1_init(void)
 {
     nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
     spi1_config.ss_pin   = SPI1_DAC_CS1;
-    spi1_config.miso_pin = SPI1_MISO_PIN;
+    spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
     spi1_config.mosi_pin = SPI1_DAC_SDI;
     spi1_config.sck_pin  = SPI1_DAC_SCLK;
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
-}
-
-void ADC_reinit(void)
-{
-	unsigned long adcmd = 0;
-	if (AD7190_Init() == 0) {
-#if NRF_LOG_USED
-		NRF_LOG_INFO("ADC_reinit AD7190_Init Failed!\r\n");
-		return;		
-#else
-		uart1_printf("ADC_reinit AD7190_Init Failed!\r\n");
-		return;
-#endif
-	}
-	AD7190_SetBridgePower(1);
-	AD7190_SetPower(1);							  //idle
-	AD7190_ChannelSelect(AD7190_CH_AIN3P_AINCOM); //AIN3, COM
-	AD7190_ChopEnable(1);						  //chop enable
-	//AD7190_RefDetEnable(1); //REFDET enable
-	AD7190_RefSelect(0);
-	AD7190_BufEnable(1);
-	AD7190_DatSta_Enable(0);
-	AD7190_Rej60Enable(1); //rej 60
-	//AD7190_RangeSetup(0, (unsigned char)CurrGain); //bipolar, 128 gain
-	AD7190_RangeSetup(0, 8);
-//원본 	ADI_SYNC_LOW;
-	nrf_delay_us(10);
-//원본 	ADI_SYNC_HIGH;
-	adcmd = AD7190_MODE_SEL(AD7190_MODE_CONT) |
-	        AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
-	        AD7190_MODE_RATE(ConvRate);
-	AD7190_SetRegisterValue(AD7190_REG_MODE, adcmd, 3, 0); // CS is not modified.
 }
 
 void 	device_init(void)
@@ -957,518 +972,8 @@ void 	device_init(void)
     spi1_dac_cs1_init();	
  	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
 
-	ADC_reinit();
+//	ADC_reinit();
 }
-
-#define LCSTR_LEN 20
-
-uint16_t LCcnt = 0;
-uint16_t LCid = 0;
-char LCcmdStr[4];
-char LCresult[LCSTR_LEN];
-
-//char LCresult1[LCSTR_LEN];
-uint8_t LCcmdok = 0;
-uint16_t LClen = 0;
-
-
-bt_cmd_fet_t func_arry[REQ_CMDMAX] = {
-	{	REQ_DACRD, func_cmd_DARD},
-	{	REQ_DACRC, func_cmd_DARC},
-	{	REQ_DACSET, func_cmd_DAST},
-	{	REQ_DACSETRC, func_cmd_DASR},
-	{	REQ_ADCSET, func_cmd_ADSE},
-	{	REQ_ADmST, func_cmd_ADmS},
-	{	REQ_ADnST, func_cmd_ADnS},
-	{	REQ_ADKST, func_cmd_ADKS},
-	{	REQ_NO, NULL},
-	{	REQ_CODE, NULL},
-	{	REQ_QN, NULL},
-	{	REQ_CONTAINER, NULL},
-	{	REQ_WEIGHT, NULL},
-	{	REQ_READMIN, NULL},
-	{	REQ_READMAX, NULL},
-	{	REQ_CONTSET, NULL},
-	{	REQ_CONTRST, NULL},
-	{	REQ_ZEROSET, NULL},
-	{	REQ_CHGNO, NULL},
-	{	REQ_CHGQN, NULL},
-	{	REQ_CHGCODE, NULL},
-	{	REQ_SETHOLD, NULL},
-	{	REQ_RELHOLD, NULL},
-	{	REQ_START, NULL},
-	{	REQ_STOP, NULL},
-	{	REQ_CHGMIN, NULL},
-	{	REQ_CHGMAX, NULL},
-#if (WEIGHSCALE == CRWS100)
-	{	REQ_DISP, NULL},
-	{	REQ_DEND, NULL},
-	{	REQ_MAXSET, NULL},
-	{	INF_TEMP, NULL},
-#endif
-};
-
-const char *LCcommand[] = {
-	"DARD",
-	"DARC",
-	"DAST",
-	"DASR",
-	"ADSE",
-	"ADmS",
-	"ADnS",
-	"ADKS"
-	"RSNO",
-	"RCNO",
-	"RPNO",
-	"RTAR",
-	"RCWT",
-	"RSP1",
-	"RSP2",
-	"WTAR",
-	"WTRS",
-	"WZER",
-	"WSNO",
-	"WPNO",
-	"WCNO",
-	"WHOL",
-	"WHRS",
-	"WSTR",
-	"WSTO",
-	"WSP1",
-	"WSP2",
-#if (WEIGHSCALE == CRWS100)
-	"WDSP",
-	"WDED",
-	"WMAX",
-	"ITEM",
-#endif
-	""
-};
-
-void SendADCmResponse(LCcmd_e_type cmd)
-{
-	char sendstr[20] = {
-		0,
-	};
-	int i = 0, k = 0;
-	uint16_t crc3 = 0;
-	int tmpData;
-	double tmpData1;
-	double tmpData2;
-//h 	double I;
-	AD7190_WaitRdyGoLow();
-	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
-	nrf_delay_ms(1000);
-	tmpData2 = ((5 * (tmpData1 - 0x813500) / 0x7eaf00)) + 0.051 - 0.0009;
-//h 	I = (tmpData2 / 1.8) / (0.01 * 100) * 1000;
-	//uart1_printf("tmpData: %f mV\r",tmpData2*1000);
-	//uart1_printf("i: %f mA\r\n",I);
-	tmpData = (int)(tmpData2 * 10000);
-	sendstr[i++] = 'A';
-	sendstr[i++] = LCcommand[cmd][0];
-	sendstr[i++] = LCcommand[cmd][1];
-	sendstr[i++] = LCcommand[cmd][2];
-	sendstr[i++] = LCcommand[cmd][3];
-	for (k = 1; k < 5; k++) {
-		crc3 += sendstr[k];
-	}
-	sendstr[i++] = (tmpData / 10000) % 10 + '0';
-	sendstr[i++] = (tmpData / 1000) % 10 + '0';
-	sendstr[i++] = (tmpData / 100) % 10 + '0';
-	sendstr[i++] = (tmpData / 10) % 10 + '0';
-	sendstr[i++] = tmpData % 10 + '0';
-	sendstr[i++] = (crc3 / 100) % 10 + '0';
-	sendstr[i++] = (crc3 / 10) % 10 + '0';
-	sendstr[i++] = crc3 % 10 + '0';
-	sendstr[i++] = 'B';
-	Serial1_PutStringSize(sendstr, i);
-	uart1_printf("\r\n");
-}
-
-void SendADCnResponse(LCcmd_e_type cmd)
-{
-	char sendstr[20] = {
-		0,
-	};
-	int i = 0, k = 0;
-	uint16_t crc3 = 0;
-	int tmpData;
-	double tmpData1;
-	double tmpData2;
-//h 	double I;
-	AD7190_WaitRdyGoLow();
-	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
-	nrf_delay_ms(1000);
-	tmpData2 = ((5 * (tmpData1 - 8404000)) / 8365900) + 0.012; //10
-	//tmpData2 = ((5*(tmpData1-0x813500)/0x7eaf00))+0.012; //10
-//h 	I = (tmpData2 * 1.98) / (10 * 100) * 1000; //10
-	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10
-	//uart1_printf("i: %f mA\r\n",I); //10
-	tmpData = (int)(tmpData2 * 10000);
-	sendstr[i++] = 'A';
-	sendstr[i++] = LCcommand[cmd][0];
-	sendstr[i++] = LCcommand[cmd][1];
-	sendstr[i++] = LCcommand[cmd][2];
-	sendstr[i++] = LCcommand[cmd][3];
-	for (k = 1; k < 5; k++) {
-		crc3 += sendstr[k];
-	}
-	sendstr[i++] = (tmpData / 10000) % 10 + '0';
-	sendstr[i++] = (tmpData / 1000) % 10 + '0';
-	sendstr[i++] = (tmpData / 100) % 10 + '0';
-	sendstr[i++] = (tmpData / 10) % 10 + '0';
-	sendstr[i++] = tmpData % 10 + '0';
-	sendstr[i++] = (crc3 / 100) % 10 + '0';
-	sendstr[i++] = (crc3 / 10) % 10 + '0';
-	sendstr[i++] = crc3 % 10 + '0';
-	sendstr[i++] = 'B';
-	Serial1_PutStringSize(sendstr, i);
-	uart1_printf("\r\n");
-}
-
-void SendADCKResponse(LCcmd_e_type cmd)
-{
-	char sendstr[20] = {
-		0,
-	};
-	int i = 0, k = 0;
-	uint16_t crc3 = 0;
-	int tmpData;
-	double tmpData1;
-	double tmpData2;
-//h 	double I;
-	AD7190_WaitRdyGoLow();
-	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
-	nrf_delay_ms(1000);
-	tmpData2 = ((5 * (tmpData1 - 0x813500)) / 0x7eaf00) + 0.050; //10k
-//h 	I = tmpData2 / (10000 * 100) * 10000000;					 //10k
-	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10k
-	//uart1_printf("i: %f uA\r\n",I); //10k
-	tmpData = (int)(tmpData2 * 10000);
-	sendstr[i++] = 'A';
-	sendstr[i++] = LCcommand[cmd][0];
-	sendstr[i++] = LCcommand[cmd][1];
-	sendstr[i++] = LCcommand[cmd][2];
-	sendstr[i++] = LCcommand[cmd][3];
-	for (k = 1; k < 5; k++) {
-		crc3 += sendstr[k];
-	}
-	sendstr[i++] = (tmpData / 10000) % 10 + '0';
-	sendstr[i++] = (tmpData / 1000) % 10 + '0';
-	sendstr[i++] = (tmpData / 100) % 10 + '0';
-	sendstr[i++] = (tmpData / 10) % 10 + '0';
-	sendstr[i++] = tmpData % 10 + '0';
-	sendstr[i++] = (crc3 / 100) % 10 + '0';
-	sendstr[i++] = (crc3 / 10) % 10 + '0';
-	sendstr[i++] = crc3 % 10 + '0';
-	sendstr[i++] = 'B';
-	Serial1_PutStringSize(sendstr, i);
-	uart1_printf("\r\n");
-}
-
-void SendSetcmdResponse(LCcmd_e_type cmd, char *val)
-{
-	char sendstr[20] = {
-		0,
-	};
-	int i = 0, j = 0, k = 0;
-	uint16_t crc3 = 0;
-	sendstr[i++] = 'A';
-	sendstr[i++] = LCcommand[cmd][0];
-	sendstr[i++] = LCcommand[cmd][1];
-	sendstr[i++] = LCcommand[cmd][2];
-	sendstr[i++] = LCcommand[cmd][3];
-	for (k = 1; k < 5; k++) {
-		crc3 += sendstr[k];
-	}
-	for (j = 0; j < 5; j++) {
-		sendstr[i++] = *val++;
-	}
-	sendstr[i++] = (crc3 / 100) % 10 + '0';
-	sendstr[i++] = (crc3 / 10) % 10 + '0';
-	sendstr[i++] = crc3 % 10 + '0';
-	sendstr[i++] = 'B';
-	Serial1_PutStringSize(sendstr, i);
-	nrf_delay_ms(8);
-}
-
-void SendReadcmdResponse(LCcmd_e_type cmd, char val1, char val2)
-{
-	char sendstr[20] = {
-		0,
-	};
-	int i = 0, k = 0;
-	uint16_t crc3 = 0;
-	sendstr[i++] = 'A';
-	sendstr[i++] = LCcommand[cmd][0];
-	sendstr[i++] = LCcommand[cmd][1];
-	sendstr[i++] = LCcommand[cmd][2];
-	sendstr[i++] = LCcommand[cmd][3];
-	for (k = 1; k < 5; k++) {
-		crc3 += sendstr[k];
-	}
-	sendstr[i++] = val1;
-	sendstr[i++] = val2;
-	sendstr[i++] = '0';
-	sendstr[i++] = '0';
-	sendstr[i++] = '0';
-	sendstr[i++] = (crc3 / 100) % 10 + '0';
-	sendstr[i++] = (crc3 / 10) % 10 + '0';
-	sendstr[i++] = crc3 % 10 + '0';
-	sendstr[i++] = 'B';
-	Serial1_PutStringSize(sendstr, i);
-	//uart1_printf("\rdac voltage= %c.%c V\r\n",val1,val2);
-	nrf_delay_ms(8);
-}
-
-void RcvCmd(void)
-{
-	uint8_t rxd1;
-//h 	char sign;
-	if (rx1_flag) {
-		rx1_flag = 0;
-		//rx3_enter--;
-		LCcmdok = 0;
-		LCcnt = 0;
-		LClen = 0;
-		
-//h 		uint8_t LCtail = 0;
-		//SerialPutChar1('[');
-		if (rx1_enter) {
-			//패킷이 정상적으로 들어오면 rx1_enter가 set되어진다
-			//rx1_enter--;
-			while ((rxd1 = GetByte1()) != 0xff) { //Queue가 끝나기 전까지 검사
-				//SerialPutChar1(rxd3);
-				if (rxd1 == 0x00) {
-					uart1_printf("*uart error 0x00\r\n");
-					LCcnt = 0;
-				}
-				switch (LCcnt) { //초기 LCcnt의 값은 0
-				case 0:
-					//LCid += (rxd1-'0') * 10;
-					//'0'은 asc2로 환산하면 0x30
-					// 1~9까지의 asc2는 0x31~0x39이므로
-					//0x30을 지우기 위하여 -'0'을 수행한다
-					//10의 자리수를 나타내기 위해 10을 곱한다
-					break;
-				case 1:
-					LCcmdStr[0] = rxd1; //명령어를 저장한다
-					break;
-				//LCid += rxd1-'0';
-				//break;
-				case 2:
-					LCcmdStr[1] = rxd1;
-					break;
-				case 3:
-					LCcmdStr[2] = rxd1;
-					break;
-				case 4:
-					LCcmdStr[3] = rxd1;
-					break;
-				default:
-					if (rxd1 == 'B') { //패킷의  Tail부분에 도달했으면
-						LCcmdok = 1;	 //LCcmdok를 1로 set해 패킷전송이 끝났음을 알린다
-						if (rx1_enter)   //패킷이 정상적으로 들어온것이 확인되면
-							rx1_enter--; //rxX_enter를 0으로 줄여 reset시킨다
-					}
-					else
-						LCresult[LClen++] = rxd1; //패킷의 Tail부분에 도달하지 않았으면
-					//LCresult배열에 패킷을 저장시킨다
-					//패킷의 data부분
-					break;
-				}
-				LCcnt++; //LCcnt를 1씩 증가시킨다
-				if (LCcnt >= 0xffff) {
-					uart1_printf("*LCcnt over %d\r\n", LCcnt);
-					LCcnt = 0;
-				}
-				if (LCcmdok) { //패킷전송이 완료되면
-					if ((strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) && (LClen == LCcmd_len[REQ_DACSET])) {
-						//LCcmdStr과 LCcommand를 서로 비교한다
-						//uart1_printf("*cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0; //if가 true라면 LCcmdok은 reset
-						LCcnt = 0;   //LCcnt도 reset된다
-						//break;
-					}
-					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
-						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0;
-						LCcnt = 0;
-						//PafiEventSet(EVENT_ZEROSET);
-						//break;
-					}
-					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
-						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0;
-						LCcnt = 0;
-						//PafiEventSet(EVENT_ZEROSET);
-						//break;
-					}
-					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRC], 4) == 0) && (LClen == LCcmd_len[REQ_DACRC])) {
-						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0;
-						LCcnt = 0;
-						//PafiEventSet(EVENT_ZEROSET);
-						//break;
-					}
-					else if ((strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) && (LClen == LCcmd_len[REQ_ADCSET])) {
-						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0;
-						LCcnt = 0;
-						//PafiEventSet(EVENT_ZEROSET);
-						//break;
-					}
-					/*else if((strncmp(LCcmdStr,LCcommand[REQ_MAXSET],4) == 0) && (LClen == LCcmd_len[REQ_MAXSET]))
-					{
-						uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
-						LCcmdok = 0;
-						LCcnt = 0;
-						PafiEventSet(EVENT_MAXSET);
-						//break;
-					}*/
-					else
-						LClen = 0; //if가 false라면 LClen을 0으로 초기화
-					//uart1_printf("cmd not ok! len:%d, %s\r\n",LClen, LCcmdStr);
-					//////////////////////////////////////////////////////////
-					LCcmdok = 0; //LCcmdok초기화
-					LCcnt = 0;   //LCcnt초기화
-					if (rx1_enter)
-						rx1_enter--; //rx3_enter초기화
-				}
-				if (LCcnt > 50)
-					uart1_printf("*LCcnt Overflow! %d, %s\r\n", LCcnt, LCcmdStr);
-			}
-			//SerialPutChar1(']');
-//h			uint16_t dac_value1 = 1;
-//h			uint16_t dac_value2 = 0;
-//h			uint16_t CRC7 = 0;
-			uint16_t CRC6 = 0;
-			uint16_t CRC5 = 0;
-			uint16_t CRC4 = 0;
-//h			uint16_t CRC3 = 0;
-//h			uint16_t CRC2 = 0;
-			uint16_t CRC1 = 0;
-			uint16_t CRC0 = 0;
-			uint16_t ADC_Value = 0;
-			if (strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) {
-				// voltage데이터 수신,data비교
-				DAC_Value = 0;
-				DAC_Value += (LCresult[0] - '0') * 10000;
-				DAC_Value += (LCresult[1] - '0') * 1000;
-				DAC_Value += (LCresult[2] - '0') * 100;
-				DAC_Value += (LCresult[3] - '0') * 10;
-				DAC_Value += (LCresult[4] - '0');
-				CRC0 += (LCresult[5] - '0') * 100;
-				CRC0 += (LCresult[6] - '0') * 10;
-				CRC0 += (LCresult[7] - '0');
-				for (int i = 0; i < 4; i++) {
-					CRC1 += LCcmdStr[i];
-				}
-				if (CRC1 == CRC0) {
-					//uart1_printf("cmd OK\r\n");
-					DAC_Value = DAC_Value / 1000;
-					//DAC_Value = (int)(1000000*DAC_Value)/38.147;
-					//  uart1_printf("Setting_Voltage: %c.%c V\n\r",LCresult[0],LCresult[1]);
-					dac1 = ((voltage_value[DAC_Value] - 32768) & 0xff00) >> 8;
-					dac2 = (voltage_value[DAC_Value] - 32768) & 0xff;
-					uint16_t dac3[3] = {0x00, dac1, dac2};
-//					dac_datas(dac3);
-   					spi1_dac_cs0_init();
-					uint8_t value[6];
-					uint8_t rcv_value[6];
-					for(char i = 0; i < 3; i++)
-					{
-						value[i*2] = dac3[i];
-						value[(i*2)+1] = dac3[i] >> 8;
-					}	
- 					APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, value, 6, rcv_value, 7));
-	
-					SendSetcmdResponse(REQ_DACSETRC, LCresult);
-					dac_value3 = LCresult[0];
-					dac_value4 = LCresult[1];
-				}
-				else {
-					uart1_printf("cmd error\r\n");
-				}
-			}
-			if (strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) {
-				// voltage데이터 수신,data비교
-				DAC_Value = 0;
-				DAC_Value += (LCresult[0] - '0') * 10000;
-				DAC_Value += (LCresult[1] - '0') * 1000;
-				DAC_Value += (LCresult[2] - '0') * 100;
-				DAC_Value += (LCresult[3] - '0') * 10;
-				DAC_Value += (LCresult[4] - '0');
-				if (DAC_Value != 65535) {
-					uart1_printf("packet error(data)\r\n");
-					rx1_enter = 0;
-				}
-				CRC4 += (LCresult[5] - '0') * 100;
-				CRC4 += (LCresult[6] - '0') * 10;
-				CRC4 += (LCresult[7] - '0');
-				for (int i = 0; i < 4; i++) {
-					CRC5 += LCcmdStr[i];
-				}
-				if (CRC5 == CRC4) {
-					//uart1_printf("cmd OK\r\n");
-					SendReadcmdResponse(REQ_DACRC, dac_value3, dac_value4);
-				}
-				else {
-					uart1_printf("cmd error\r\n");
-				}
-			}
-			if (strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) {
-				// voltage데이터 수신,data비교
-				ADC_Value = 0;
-				ADC_Value += (LCresult[0] - '0') * 10000;
-				ADC_Value += (LCresult[1] - '0') * 1000;
-				ADC_Value += (LCresult[2] - '0') * 100;
-				ADC_Value += (LCresult[3] - '0') * 10;
-				ADC_Value += (LCresult[4] - '0');
-				if (ADC_Value > 2) {
-					uart1_printf("packet error(data)\r\n");
-					rx1_enter = 0;
-				}
-				CRC5 += (LCresult[5] - '0') * 100;
-				CRC5 += (LCresult[6] - '0') * 10;
-				CRC5 += (LCresult[7] - '0');
-				for (int i = 0; i < 4; i++) {
-					CRC6 += LCcmdStr[i];
-				}
-				if (CRC6 == CRC5) {
-					//uart1_printf("cmd OK\r\n");
-					if (ADC_Value == 0) {
-						//uart1_printf("shunt resistor: 10m ohm\r\n");
-						while (1) {
-							SendADCmResponse(REQ_ADmST);
-							RcvCmd();
-						}
-					}
-					else if (ADC_Value == 1) {
-						//uart1_printf("shunt resistor: 10 ohm\r\n");
-						while (1) {
-							SendADCnResponse(REQ_ADnST);
-							RcvCmd();
-						}
-					}
-					else if (ADC_Value == 2) {
-						//uart1_printf("shunt resistor: 10K ohm\r\n");
-						while (1) {
-							SendADCKResponse(REQ_ADKST);
-							RcvCmd();
-						}
-					}
-				}
-				else {
-					uart1_printf("cmd error\r\n");
-				}
-			}
-			////////////////////////////////////////////////////////////////////////////////////
-			//uart1_printf("*TempValue: %d, %03.02f\r\n",TempValue, (float)((TempValue/100)+((TempValue%100)*0.01)));
-		}
-	}
-}
-
 
 /**@brief Application main function.
  */
@@ -1481,7 +986,7 @@ int main(void)
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
 
-    uart_init();
+//원본    uart_init();
     log_init();
 
 	buttons_leds_init(&erase_bonds);
@@ -1494,38 +999,33 @@ int main(void)
     conn_params_init();
 
 //180321 DLE-S		//속도를 높이기 위해 
-    data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
-    conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
+//    data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
+//    conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
 	
 //180315 SPI-S
-//   nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-//    spi0_config.ss_pin   = SPI0_ADC_CS;
-//    spi0_config.miso_pin = SPI0_ADC_DIN;
-//    spi0_config.mosi_pin = SPI0_ADC_DOUT;
-//    spi0_config.sck_pin  = SPI0_ADC_SCLK;
-//    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
-	
-//spi1_dac_cs0_init();
+    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+    spi0_config.ss_pin   = SPI0_ADC_CS;
+    spi0_config.miso_pin = SPI0_ADC_DIN;
+    spi0_config.mosi_pin = SPI0_ADC_DOUT;
+    spi0_config.sck_pin  = SPI0_ADC_SCLK;
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
 //180315 SPI-E
-	device_init();	
 
+	device_init();
+	
 //180316 SAADC-S
-//   NRF_LOG_INFO("SAADC HAL simple example.");
- 
-#if SAADC  
-   saadc_init();
+   NRF_LOG_INFO("SAADC HAL simple example.");
+    saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
-#endif	
 //180316 SAADC-E
 	
-    uart1_printf("\r\nUART Start! - uart1\r\n");
-	printf("\r\nUART Start! - printf\r\n");
-    NRF_LOG_INFO("UART Start! - NRF");
+    printf("\r\nUART Start!\r\n");
+    NRF_LOG_INFO("UART Start!");
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
-	
+
     while (1)
     {
 //180315 SPI-S			
@@ -1533,21 +1033,21 @@ int main(void)
         memset(m_rx_adc_buf, 0, m_adc_length);
         memset(m_rx_dac_buf, 0, m_dac_length);		
 
-//        spi0_xfer_done = false;
-//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
+        spi0_xfer_done = false;
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
 		
-//		nrf_delay_ms(2000);
-//        spi1_xfer_done = false;
-//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
+		nrf_delay_ms(200);
+        spi1_xfer_done = false;
+        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
 
-//		nrf_delay_ms(2000);		//원본은 200 -> 2000으로 변경
+		nrf_delay_ms(200);
 
 //180315 SPI-E
 
-//        while (!spi0_xfer_done)
-//        {
-//            __WFE();
-//        }
+        while (!spi0_xfer_done)
+        {
+            __WFE();
+        }
 
         NRF_LOG_FLUSH();
 
