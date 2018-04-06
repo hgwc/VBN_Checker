@@ -1480,32 +1480,32 @@
 
 //180223 SPI-S
 #ifndef SPI0_ADC_SCLK
-#define SPI0_ADC_SCLK 15		//18			//3
+#define SPI0_ADC_SCLK 	15		//18			//3
 #endif
 #ifndef SPI0_ADC_DIN
-#define SPI0_ADC_DIN 16		//16			//28
+#define SPI0_ADC_DIN 	16		//16			//28
 #endif
 #ifndef SPI0_ADC_DOUT
-#define SPI0_ADC_DOUT 17		//17			//4
+#define SPI0_ADC_DOUT 	17		//17			//4
 #endif
 #ifndef SPI0_ADC_CS
-#define SPI0_ADC_CS 14		//15			//29
+#define SPI0_ADC_CS 	14		//15			//29
 #endif
 
 #ifndef SPI1_DAC_SCLK
-#define SPI1_DAC_SCLK 26		//18			//3
+#define SPI1_DAC_SCLK 	26		//18			//3
 #endif
 #ifndef SPI1_MISO_PIN
-#define SPI1_MISO_PIN 25		//16			//28
+#define SPI1_MISO_PIN 	25		//16			//28
 #endif
 #ifndef SPI1_DAC_SDI
-#define SPI1_DAC_SDI 11		//17			//4 No Connection ?
+#define SPI1_DAC_SDI 	25		//17			//4 No Connection ?
 #endif
 #ifndef SPI1_DAC_CS0
-#define SPI1_DAC_CS0 27		//15			//29
+#define SPI1_DAC_CS0 	27		//15			//29
 #endif
 #ifndef SPI1_DAC_CS1
-#define SPI1_DAC_CS1 28		//15			//29
+#define SPI1_DAC_CS1 	28		//15			//29
 #endif
 //180223 SPI-E
 
@@ -2182,11 +2182,10 @@
 #define APP_TWI_ENABLED 0
 #endif
 
-#if !NRF_LOG_USED
 // <e> APP_UART_ENABLED - app_uart - UART driver
 //==========================================================
 #ifndef APP_UART_ENABLED
-#define APP_UART_ENABLED 1
+#define APP_UART_ENABLED 0		//원본 1
 #endif
 // <o> APP_UART_DRIVER_INSTANCE  - UART instance used
  
@@ -2196,22 +2195,7 @@
 #define APP_UART_DRIVER_INSTANCE 0
 #endif
 
-#else
-// <e> APP_UART_ENABLED - app_uart - UART driver
-//==========================================================
-#ifndef APP_UART_ENABLED
-#define APP_UART_ENABLED 0
-#endif
-// <o> APP_UART_DRIVER_INSTANCE  - UART instance used
- 
-// <0=> 0 
-
-#ifndef APP_UART_DRIVER_INSTANCE
-#define APP_UART_DRIVER_INSTANCE 0
-#endif
-		 
 // </e>
-#endif
 
 // <q> APP_USBD_CLASS_AUDIO_ENABLED  - app_usbd_audio - USB AUDIO class
  
@@ -3125,7 +3109,6 @@
 
 // </e>
 
-#if NRF_LOG_USED
 // 원본에 없는 내용 추가 .. UART로 Log를 출력하기 위해 아래 문장을 전체를 추가
 // <e> NRF_LOG_BACKEND_UART_ENABLED - nrf_log_backend_uart - Log UART backend
 //==========================================================
@@ -3135,7 +3118,6 @@
 // <o> NRF_LOG_BACKEND_UART_TX_PIN - UART TX pin 
 #ifndef NRF_LOG_BACKEND_UART_TX_PIN
 #define NRF_LOG_BACKEND_UART_TX_PIN 6
-#endif
 #endif
 
 // <o> NRF_LOG_BACKEND_UART_BAUDRATE  - Default Baudrate
