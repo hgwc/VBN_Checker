@@ -1479,6 +1479,7 @@
 #endif
 
 //180223 SPI-S
+//SPI0 - ADC
 #ifndef SPI0_ADC_SCLK
 #define SPI0_ADC_SCLK 	15		//18			//3
 #endif
