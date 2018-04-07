@@ -1,6 +1,8 @@
 #ifndef __MAIN_H
 #define __MAIN_H
 
+#define NRF_LOG_USED	1
+
 #include <stdint.h>
 #include <string.h>
 #include "nordic_common.h"
@@ -18,7 +20,9 @@
 #include "nrf_ble_gatt.h"
 #include "app_timer.h"
 #include "ble_nus.h"
+
 #include "app_uart.h"
+
 #include "app_util_platform.h"
 #include "bsp_btn_ble.h"
 		 
@@ -40,8 +44,7 @@
 #include "bt.h"
 #include "bt_proc_cmd.h"
 
-#define SAADC				1
-#define NRF_LOG_USED	1
+#define SAADC				0
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 

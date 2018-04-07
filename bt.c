@@ -42,12 +42,14 @@ void bt_flush_rx_buffer(void)
 
 void bt_send_command(char *s)
 {
-	Serial2_PutString(s);
+//bt 모듈로 uart를 통하여 명령을 전송하는 것으로 보임
+//		Serial2_PutString(s);
 }
 
 void bt_send_byte(char c)
 {
-	SerialPutChar2(c);
+//bt 모듈로 uart를 통하여 명령을 전송하는 것으로 보임		
+//	SerialPutChar2(c);
 }
 
 void bt_handle_timeout()

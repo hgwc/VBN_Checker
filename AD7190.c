@@ -111,7 +111,7 @@ unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
 	
     //SPI_Read(AD7190_SLAVE_ID * modifyCS, registerWord, bytesNumber + 1);
 //    read_spi_datas(registerWord, bytesNumber + 1);
-  	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerWord, 2, temp, bytesNumber + 1));   
+  	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerWord, 5, temp, bytesNumber + 1));   
     for(i = 1; i < bytesNumber + 1; i++) 
     {
 //원본        buffer = (buffer << 8) + registerWord[i];
@@ -140,7 +140,9 @@ unsigned char AD7190_Init(void)
     spi0_config.mosi_pin = SPI0_ADC_DOUT;
     spi0_config.sck_pin  = SPI0_ADC_SCLK;
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
-//		
+// non-blocking에서 blocking으로 변환
+//	APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, NULL, NULL));	
+	nrf_delay_ms(1);		
     AD7190_Reset();
     /* Allow at least 500 us before accessing any of the on-chip registers. */
     //TIME_DelayMs(1);

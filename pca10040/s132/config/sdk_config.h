@@ -4105,7 +4105,7 @@
 // <e> SAADC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SAADC_CONFIG_LOG_ENABLED
-#define SAADC_CONFIG_LOG_ENABLED 0
+#define SAADC_CONFIG_LOG_ENABLED 1		//원본 0
 #endif
 // <o> SAADC_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -4116,7 +4116,7 @@
 // <4=> Debug 
 
 #ifndef SAADC_CONFIG_LOG_LEVEL
-#define SAADC_CONFIG_LOG_LEVEL 3
+#define SAADC_CONFIG_LOG_LEVEL 1		//원본 3
 #endif
 
 // <o> SAADC_CONFIG_INFO_COLOR  - ANSI escape code prefix.
@@ -4207,7 +4207,7 @@
 // <e> SPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SPI_CONFIG_LOG_ENABLED
-#define SPI_CONFIG_LOG_ENABLED 0
+#define SPI_CONFIG_LOG_ENABLED 1		//원본 0
 #endif
 // <o> SPI_CONFIG_LOG_LEVEL  - Default Severity level
  

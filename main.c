@@ -84,6 +84,8 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+#include "AD7190.h"
+
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
 #define APP_FEATURE_NOT_SUPPORTED       BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
@@ -117,9 +119,12 @@
 #define NRF_BLE_GATT_MAX_MTU_SIZE		103			//원본에 업던 것을 추가함
 
 //제어용 GPIO 설정 -S(18.04.02)
-#define NO2_PREHEAT	3
-#define SHDN		22
+#define NO2_PREHEAT		3
+#define SHDN						22
 //제어용 GPIO 설정 -S(18.04.02)
+
+#define NRF_LOG_USED		1
+#define SAADC 					1
 
 BLE_NUS_DEF(m_nus);                                                                 /**< BLE NUS service instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                                           /**< GATT module instance. */
@@ -187,7 +192,8 @@ static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer l
 void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
                        void *                    p_context)
 {
-    if(p_event -> type == NRF_DRV_SPI_EVENT_DONE)
+	NRF_LOG_INFO("SPI0_Transfer completed.");
+	if(p_event -> type == NRF_DRV_SPI_EVENT_DONE)
 	{
 		spi0_xfer_done = true;
 		NRF_LOG_INFO("SPI0_Transfer completed.");
@@ -240,7 +246,7 @@ void saadc_sampling_event_init(void)
     APP_ERROR_CHECK(err_code);
 
     /* setup m_timer for compare event every 400ms */
-    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 200);
+    uint32_t ticks = nrf_drv_timer_ms_to_ticks(&m_timer, 5000);
     nrf_drv_timer_extended_compare(&m_timer,
                                    NRF_TIMER_CC_CHANNEL0,
                                    ticks,
@@ -294,7 +300,9 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 			{
 					p_event->data.done.p_buffer[i] = 0;		//180402 음수가 나오면 0으로 변경				
 			}
-           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
+#if 0			
+//원본           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
+#endif		   
 		}
 		bytes_to_send = sizeof(p_event->data.done.p_buffer[i]);
 						adc_value = p_event->data.done.p_buffer[i];
@@ -939,40 +947,86 @@ uint16_t voltage_value[] = {
 
 void spi1_dac_cs0_init(void)
 {
-    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi1_config.ss_pin   = SPI1_DAC_CS0;
-    spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
-    spi1_config.mosi_pin = SPI1_DAC_SDI;
-    spi1_config.sck_pin  = SPI1_DAC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
-}
-
-void spi1_dac_cs1_init(void)
-{
-    nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi1_config.ss_pin   = SPI1_DAC_CS1;
-    spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
-    spi1_config.mosi_pin = SPI1_DAC_SDI;
-    spi1_config.sck_pin  = SPI1_DAC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
-}
-
-void 	device_init(void)
-{
 	m_tx_dac_buf[0] = 0x00;
 	m_tx_dac_buf[1]= ((voltage_value[10] - 32768) & 0xff00) >> 8;	
 	m_tx_dac_buf[2] = (voltage_value[10] - 32768) & 0xff;	
 //	uint16_t dac6[3] = {0x00, dac4, dac5};
 //	dac_datas(dac6);
 	
-    spi1_dac_cs0_init();
- 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
-	
-	nrf_drv_spi_uninit(&spi1_dac);	
-    spi1_dac_cs1_init();	
- 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+//    spi1_dac_cs0_init();
+     nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+     spi1_config.ss_pin   = SPI1_DAC_CS0;
+     spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
+     spi1_config.mosi_pin = SPI1_DAC_SDI;
+     spi1_config.sck_pin  = SPI1_DAC_SCLK;
+	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
+// non-blocking에서 blocking으로 전환	
+//	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	 
+	 nrf_delay_ms(1);
+ 	 APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));	 
+	nrf_delay_ms(1);
+}
 
-//	ADC_reinit();
+void spi1_dac_cs1_init(void)
+{
+	m_tx_dac_buf[0] = 0x00;
+	m_tx_dac_buf[1]= ((voltage_value[10] - 32768) & 0xff00) >> 8;	
+	m_tx_dac_buf[2] = (voltage_value[10] - 32768) & 0xff;	
+//	uint16_t dac6[3] = {0x00, dac4, dac5};
+//	dac_datas(dac6);
+     nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+     spi1_config.ss_pin   = SPI1_DAC_CS1;
+     spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
+     spi1_config.mosi_pin = SPI1_DAC_SDI;
+     spi1_config.sck_pin  = SPI1_DAC_SCLK;
+     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));
+// non-blocking에서 blocking으로 전환
+//     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	
+	 nrf_delay_ms(1);	
+ 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+	nrf_delay_ms(1);
+}
+
+void ADC_reinit(void)
+{
+	unsigned long adcmd = 0;
+	if (AD7190_Init() == 0) {
+#if NRF_LOG_USED
+		NRF_LOG_INFO("ADC_reinit AD7190_Init Failed!\r\n");
+		return;		
+#else
+		uart1_printf("ADC_reinit AD7190_Init Failed!\r\n");
+		return;
+#endif
+	}
+	AD7190_SetBridgePower(1);
+	AD7190_SetPower(1);							  //idle
+	AD7190_ChannelSelect(AD7190_CH_AIN3P_AINCOM); //AIN3, COM
+	AD7190_ChopEnable(1);						  //chop enable
+	//AD7190_RefDetEnable(1); //REFDET enable
+	AD7190_RefSelect(0);
+	AD7190_BufEnable(1);
+	AD7190_DatSta_Enable(0);
+	AD7190_Rej60Enable(1); //rej 60
+	//AD7190_RangeSetup(0, (unsigned char)CurrGain); //bipolar, 128 gain
+	AD7190_RangeSetup(0, 8);
+//원본 	ADI_SYNC_LOW;
+	nrf_delay_us(10);
+//원본 	ADI_SYNC_HIGH;
+	adcmd = AD7190_MODE_SEL(AD7190_MODE_CONT) |
+	        AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
+	        AD7190_MODE_RATE(ConvRate);
+	AD7190_SetRegisterValue(AD7190_REG_MODE, adcmd, 3, 0); // CS is not modified.
+}
+
+void 	device_init(void)
+{
+
+	spi1_dac_cs0_init();
+	nrf_drv_spi_uninit(&spi1_dac);	
+    spi1_dac_cs1_init();
+
+	ADC_reinit();
 }
 
 /**@brief Application main function.
@@ -999,26 +1053,34 @@ int main(void)
     conn_params_init();
 
 //180321 DLE-S		//속도를 높이기 위해 
-//    data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
-//    conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
+    data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
+    conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
 	
 //180315 SPI-S
-    nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi0_config.ss_pin   = SPI0_ADC_CS;
-    spi0_config.miso_pin = SPI0_ADC_DIN;
-    spi0_config.mosi_pin = SPI0_ADC_DOUT;
-    spi0_config.sck_pin  = SPI0_ADC_SCLK;
-    APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
-//180315 SPI-E
+//h  nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+//h  spi0_config.ss_pin   = SPI0_ADC_CS;
+//h  spi0_config.miso_pin = SPI0_ADC_DIN;
+//h  spi0_config.mosi_pin = SPI0_ADC_DOUT;
+//h  spi0_config.sck_pin  = SPI0_ADC_SCLK;
+//h  APP_ERROR_CHECK(nrf_drv_spi_init(&spi0_adc, &spi0_config, spi0_event_handler, NULL));
 
-	device_init();
+//     nrf_drv_spi_config_t spi1_config = NRF_DRV_SPI_DEFAULT_CONFIG;
+//     spi1_config.ss_pin   = SPI1_DAC_CS0;
+//     spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
+//     spi1_config.mosi_pin = SPI1_DAC_SDI;
+//     spi1_config.sck_pin  = SPI1_DAC_SCLK;
+//     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
+	
+//180315 SPI-E
 	
 //180316 SAADC-S
-   NRF_LOG_INFO("SAADC HAL simple example.");
+#if SAADC
+	NRF_LOG_INFO("SAADC HAL simple example.");
     saadc_init();
     saadc_sampling_event_init();
     saadc_sampling_event_enable();
+#endif
 //180316 SAADC-E
 	
     printf("\r\nUART Start!\r\n");
@@ -1026,6 +1088,8 @@ int main(void)
     err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
     APP_ERROR_CHECK(err_code);
 
+	device_init();
+		
     while (1)
     {
 //180315 SPI-S			
@@ -1034,28 +1098,26 @@ int main(void)
         memset(m_rx_dac_buf, 0, m_dac_length);		
 
         spi0_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
+//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, m_tx_adc_buf, m_adc_length, m_rx_adc_buf, m_adc_length));
 		
-		nrf_delay_ms(200);
+		nrf_delay_ms(1000);
         spi1_xfer_done = false;
-        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));		
-
-		nrf_delay_ms(200);
-
+//        APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+		
 //180315 SPI-E
 
-        while (!spi0_xfer_done)
-        {
-            __WFE();
-        }
+//        while (!spi0_xfer_done)
+//        {
+//            __WFE();
+//        }
 
         NRF_LOG_FLUSH();
 
-		bsp_board_led_invert(BSP_BOARD_LED_0);
-		bsp_board_led_invert(BSP_BOARD_LED_1);
-		bsp_board_led_invert(BSP_BOARD_LED_2);		
-        bsp_board_led_invert(BSP_BOARD_LED_3);		
-        nrf_delay_ms(200);
+//h		bsp_board_led_invert(BSP_BOARD_LED_0);
+//h		bsp_board_led_invert(BSP_BOARD_LED_1);
+//h		bsp_board_led_invert(BSP_BOARD_LED_2);		
+//h        bsp_board_led_invert(BSP_BOARD_LED_3);		
+//h        nrf_delay_ms(200);
     }
 //180223 SPI-E	
 
