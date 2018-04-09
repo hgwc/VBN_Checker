@@ -65,6 +65,7 @@ void AD7190_SetRegisterValue(unsigned char registerAddress,
                              unsigned char bytesNumber,
                              unsigned char modifyCS)
 {
+#if 0		
     uint16_t writeCommand[5] = {0, 0, 0, 0, 0};
     unsigned char* dataPointer    = (unsigned char*)&registerValue;
     unsigned char bytesNr         = bytesNumber;
@@ -85,7 +86,37 @@ void AD7190_SetRegisterValue(unsigned char registerAddress,
 	}
     //SPI_Write(AD7190_SLAVE_ID * modifyCS, writeCommand, bytesNumber + 1);
 //		send_spi1_datas(bytesNumber + 1, writeCommand);
-	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, bytesNumber * 2, m_rx_adc_buf, m_adc_length));		
+//	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, bytesNumber * 2, m_rx_adc_buf, m_adc_length));
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, bytesNumber, NULL, m_adc_length));	
+	nrf_delay_ms(1);
+#else
+    uint8_t writeCommand[5] = {0, 0, 0, 0, 0};
+    unsigned char* dataPointer    = (unsigned char*)&registerValue;
+    unsigned char bytesNr         = bytesNumber;
+
+NRF_LOG_INFO("AD7190_SetRegisterValue!");	
+    writeCommand[0] = AD7190_COMM_WRITE |
+                      AD7190_COMM_ADDR(registerAddress);
+    while(bytesNr > 0)
+    {
+        writeCommand[bytesNr] = (0x00FF & *dataPointer);
+        dataPointer ++;
+        bytesNr --;
+    }
+/*
+	uint8_t value[10];
+	for(char i = 0; i < bytesNumber; i++)
+	{
+		value[i*2] = writeCommand[i];
+		value[(i*2)+1] = writeCommand[i] >> 8;
+	}
+*/
+    //SPI_Write(AD7190_SLAVE_ID * modifyCS, writeCommand, bytesNumber + 1);
+//		send_spi1_datas(bytesNumber + 1, writeCommand);
+//	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, bytesNumber * 2, m_rx_adc_buf, m_adc_length));
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc,  writeCommand, bytesNumber, NULL, 0));	
+	nrf_delay_ms(1);
+#endif
 }
 
 /***************************************************************************//**
@@ -101,9 +132,10 @@ unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
                                       unsigned char bytesNumber,
                                       unsigned char modifyCS)
 {
-    unsigned char registerWord[5] = {0, 0, 0, 0, 0}; 
+#if 0
+		unsigned char registerWord[5] = {0, 0, 0, 0, 0}; 
     unsigned long buffer          = 0x0;
-	unsigned char temp[5]         = {0x0, };
+	unsigned char temp[bytesNumber + 1]         = {0x0, };
     unsigned char i               = 0;
     
     registerWord[0] = AD7190_COMM_READ |
@@ -112,6 +144,7 @@ unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
     //SPI_Read(AD7190_SLAVE_ID * modifyCS, registerWord, bytesNumber + 1);
 //    read_spi_datas(registerWord, bytesNumber + 1);
   	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerWord, 5, temp, bytesNumber + 1));   
+	nrf_delay_ms(1);	
     for(i = 1; i < bytesNumber + 1; i++) 
     {
 //원본        buffer = (buffer << 8) + registerWord[i];
@@ -119,6 +152,29 @@ unsigned long AD7190_GetRegisterValue(unsigned char registerAddress,
     }
     
     return buffer;
+#else
+		uint8_t registerWord[5] = {0, 0, 0, 0, 0}; 
+    unsigned long buffer          = 0x0;
+	unsigned char temp[1]         = {0xFF, };
+    unsigned char i               = 0;
+
+NRF_LOG_INFO("AD7190_GetRegisterValue!");	
+    registerWord[0] = AD7190_COMM_READ |
+                      AD7190_COMM_ADDR(registerAddress);
+	
+    //SPI_Read(AD7190_SLAVE_ID * modifyCS, registerWord, bytesNumber + 1);
+//    read_spi_datas(registerWord, bytesNumber + 1);
+  	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerWord, 1, temp, bytesNumber + 1));
+	nrf_delay_ms(1);
+	
+    for(i = 1; i < bytesNumber + 1; i++) 
+    {
+//원본        buffer = (buffer << 8) + registerWord[i];
+        buffer = (buffer << 8) + temp[i];			
+    }
+    
+    return buffer;	
+#endif
 }
 
 /***************************************************************************//**
@@ -130,7 +186,8 @@ unsigned char AD7190_Init(void)
 {
     unsigned char status = 1;
     unsigned char regVal = 0;
-    
+
+NRF_LOG_INFO("\r\nAD7190_Init!");		
     //SPI_Init(0, 1000000, 1, 0);
 //    init_spi1();
 //180315 SPI-S
@@ -146,9 +203,8 @@ unsigned char AD7190_Init(void)
     AD7190_Reset();
     /* Allow at least 500 us before accessing any of the on-chip registers. */
     //TIME_DelayMs(1);
-    nrf_delay_ms(2);
     regVal = AD7190_GetRegisterValue(AD7190_REG_ID, 1, 1);
-    //NRF_LOG_INFO("ID: 0x%x\r\n",regVal);
+    NRF_LOG_INFO("ID: 0x%x\r\n",regVal);
 #if 0    
     if( (regVal & AD7190_ID_MASK) != ID_AD7190)
     {
@@ -170,7 +226,8 @@ unsigned char AD7190_Init(void)
 *******************************************************************************/
 void AD7190_Reset(void)
 {
-	uint16_t registerWord[7];
+#if 0
+		uint16_t registerWord[7];
     
     registerWord[0] = 0x0001;
     registerWord[1] = 0x00FF;
@@ -189,7 +246,27 @@ void AD7190_Reset(void)
 		value[i*2] = registerWord[i];
 		value[(i*2)+1] = registerWord[i] >> 8;
 	}	
-	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, 14, m_rx_adc_buf, m_adc_length));
+//	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, 14, m_rx_adc_buf, m_adc_length));
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, 14, NULL, 0));
+	nrf_delay_ms(1);	
+#else
+		uint8_t registerByte[6];
+
+NRF_LOG_INFO("\r\nAD7190_Reset!");		
+    registerByte[0] = 0xFF;
+    registerByte[1] = 0xFF;
+    registerByte[2] = 0xFF;
+    registerByte[3] = 0xFF;
+    registerByte[4] = 0xFF;
+    registerByte[5] = 0xFF;
+    
+    //SPI_Write(AD7190_SLAVE_ID, registerWord, 7);
+//		send_spi1_datas(7, registerWord); 
+
+//	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, value, 14, m_rx_adc_buf, m_adc_length));
+	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi0_adc, registerByte, 6, NULL, 0));
+	nrf_delay_ms(1);
+#endif
 }
 
 /***************************************************************************//**
@@ -206,6 +283,7 @@ void AD7190_SetPower(unsigned char pwrMode)
      unsigned long oldPwrMode = 0x0;
      unsigned long newPwrMode = 0x0; 
  
+NRF_LOG_INFO("\r\nAD7190_SetPower!");	 
      oldPwrMode = AD7190_GetRegisterValue(AD7190_REG_MODE, 3, 1);
      oldPwrMode &= ~(AD7190_MODE_SEL(0x7));
      newPwrMode = oldPwrMode | 
@@ -227,7 +305,8 @@ void AD7190_SetBridgePower(unsigned char pwrMode)
 {
      uint8_t oldPwrMode = 0x0;
      uint8_t newPwrMode = 0x0; 
- 
+
+NRF_LOG_INFO("\r\nAD7190_SetBridgePower!");	 
      oldPwrMode = AD7190_GetRegisterValue(AD7190_REG_GPOCON, 1, 1);
      oldPwrMode &= ~(AD7190_GPOCON_BPDSW);
      newPwrMode = oldPwrMode | (pwrMode * AD7190_GPOCON_BPDSW);
@@ -237,7 +316,7 @@ void AD7190_SetBridgePower(unsigned char pwrMode)
      newPwrMode = 0x0;
      newPwrMode = AD7190_GetRegisterValue(AD7190_REG_GPOCON, 1, 1);
 
-     //NRF_LOG_INFO("AD7190_SetBridgePower! 0x%02x\r\n",newPwrMode);
+     NRF_LOG_INFO("AD7190_SetBridgePower! 0x%02x",newPwrMode);
 }
 
 /***************************************************************************//**
@@ -249,7 +328,8 @@ void AD7190_WaitRdyGoLow(void)
 {
     unsigned long timeOutCnt = 0xFFFFF;
     uint16_t i = 0;
-    
+
+NRF_LOG_INFO("\r\nAD7190_WaitRdyGoLow!");		
     while(timeOutCnt--)
     {
 //원본    	if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_6) == Bit_RESET)
@@ -272,7 +352,8 @@ void AD7190_ChannelSelect(unsigned short channel)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+
+NRF_LOG_INFO("\r\nAD7190_ChannelSelect!");	
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_CHAN(0xFF));
     newRegValue = oldRegValue | AD7190_CONF_CHAN(1 << channel);   
@@ -283,7 +364,8 @@ void AD7190_MultiChannelSelect(unsigned short chan1, unsigned short chan2)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+ 
+NRF_LOG_INFO("\r\nAD7190_MultiChannelSelect!");		
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_CHAN(0xFF));
     newRegValue = oldRegValue | AD7190_CONF_CHAN(1 << chan1)| AD7190_CONF_CHAN(1 << chan2);   
@@ -300,7 +382,8 @@ uint32_t AD7190_ChopEnable(unsigned char chop)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+
+NRF_LOG_INFO("\r\nAD7190_ChopEnable!");	
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_CHOP);
     if(chop)
@@ -328,7 +411,8 @@ void AD7190_RefDetEnable(unsigned char refdet)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+ 
+NRF_LOG_INFO("\r\nAD7190_RefDetEnable!");		
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_REFDET);
     if(refdet)
@@ -342,7 +426,8 @@ void AD7190_RefSelect(unsigned char refsel)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+
+NRF_LOG_INFO("\r\nAD7190_RefSelect!");	
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_REFSEL);
     if(refsel)
@@ -357,7 +442,8 @@ void AD7190_BufEnable(unsigned char buf)
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
      
-    oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
+NRF_LOG_INFO("\r\nAD7190_BufEnable!");
+	oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
     oldRegValue &= ~(AD7190_CONF_BUF);
     if(buf)
     	newRegValue = oldRegValue | AD7190_CONF_BUF;
@@ -375,7 +461,8 @@ void AD7190_Rej60Enable(unsigned char rej)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+
+NRF_LOG_INFO("\r\nAD7190_Rej60Enable!");	
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_MODE, 3, 1);
     oldRegValue &= ~(AD7190_MODE_REJ60);
     if(rej)
@@ -389,7 +476,8 @@ void AD7190_DatSta_Enable(unsigned char datsta)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;   
-     
+
+NRF_LOG_INFO("\r\nAD7190_DatSta_Enable!");	
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_MODE, 3, 1);
     oldRegValue &= ~(AD7190_MODE_DAT_STA);
     if(datsta)
@@ -411,7 +499,8 @@ void AD7190_Calibrate(unsigned char mode, unsigned char channel)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;
-    
+
+NRF_LOG_INFO("\r\nAD7190_Calibrate!");	
     AD7190_ChannelSelect(channel);
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_MODE, 3, 1);
     oldRegValue &= ~AD7190_MODE_SEL(0x7);
@@ -437,7 +526,8 @@ void AD7190_RangeSetup(unsigned char polarity, unsigned char range)
 {
     unsigned long oldRegValue = 0x0;
     unsigned long newRegValue = 0x0;
-    
+
+NRF_LOG_INFO("\r\nAD7190_RangeSetup!");		
     oldRegValue = AD7190_GetRegisterValue(AD7190_REG_CONF,3, 1);
     oldRegValue &= ~(AD7190_CONF_UNIPOLAR |
                      AD7190_CONF_GAIN(0x7));
@@ -458,7 +548,8 @@ unsigned long AD7190_SingleConversion(void)
 {
     unsigned long command = 0x0;
     unsigned long regData = 0x0;
- 
+
+NRF_LOG_INFO("\r\nAD7190_SingleConversion!");	
     command = AD7190_MODE_SEL(AD7190_MODE_SINGLE) | 
               AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
               AD7190_MODE_RATE(ConvRate);    
@@ -485,6 +576,7 @@ unsigned long AD7190_ContinuousReadAvg(unsigned char sampleNumber)
     unsigned long samMax = 0x0;
     unsigned long samtemp = 0x0;
 
+NRF_LOG_INFO("\r\nAD7190_ContinuousReadAvg!");	
     if((sampleNumber < 4) && (sampleNumber > 1)){
     	NRF_LOG_INFO("Wrong Parameter! %d should be more than 3\r\n",sampleNumber);
     	sampleNumber = 4;
@@ -538,7 +630,8 @@ unsigned long AD7190_TemperatureRead(void)
 {
     unsigned char temperature = 0x0;
     unsigned long dataReg = 0x0;
-    
+
+NRF_LOG_INFO("\r\nAD7190_TemperatureRead!");	
     AD7190_RangeSetup(0, AD7190_CONF_GAIN_1);
     AD7190_ChannelSelect(AD7190_CH_TEMP_SENSOR);
     dataReg = AD7190_SingleConversion();
@@ -647,7 +740,7 @@ uint32_t PutAverQueTemp2(uint32_t n)
 		reart++;
 		reart %= MAX_QUE;
 		
-		//NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reart);
+		NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reart);
 		return n;
 	}
 	else
@@ -695,8 +788,8 @@ uint32_t PutAverQueTemp2(uint32_t n)
 				}
 			}
 		}
-	//NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
-	//NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
+	NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
+	NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
 
 		hightotal = HIGH_VALT[0]+HIGH_VALT[1]+HIGH_VALT[2]+HIGH_VALT[3]+HIGH_VALT[4];
 		lowtotal = LOW_VALT[0]+LOW_VALT[1]+LOW_VALT[2]+LOW_VALT[3]+LOW_VALT[4];
@@ -705,9 +798,9 @@ uint32_t PutAverQueTemp2(uint32_t n)
 		
 		if((AverageStartF & 2) == 0)
 			AverageStartF |= 2;
-		//NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
-		//NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
-		//NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
+		NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
+		NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reart,frontt);
+		NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
 	}
 
 	return retval;
@@ -781,7 +874,7 @@ uint32_t PutAverQueAdc2(uint32_t n)
 		reara++;
 		reara %= MAX_QUE;
 		
-		//NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reara);
+		NRF_LOG_INFO("*temperature: put only 0x%08x, %d\r\n",n,reara);
 		return n;
 	}
 	else
@@ -829,8 +922,8 @@ uint32_t PutAverQueAdc2(uint32_t n)
 				}
 			}
 		}
-	//NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
-	//NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
+	NRF_LOG_INFO("**HIGH_VALT: %d, %d, %d, %d, %d\r\n",HIGH_VALT[0],HIGH_VALT[1],HIGH_VALT[2],HIGH_VALT[3],HIGH_VALT[4]);
+	NRF_LOG_INFO("**LOW_VALT: %d, %d, %d, %d, %d\r\n",LOW_VALT[0],LOW_VALT[1],LOW_VALT[2],LOW_VALT[3],LOW_VALT[4]);
 
 		hightotal = HIGH_VALA[0]+HIGH_VALA[1]+HIGH_VALA[2]+HIGH_VALA[3]+HIGH_VALA[4];
 		lowtotal = LOW_VALA[0]+LOW_VALA[1]+LOW_VALA[2]+LOW_VALA[3]+LOW_VALA[4];
@@ -839,9 +932,9 @@ uint32_t PutAverQueAdc2(uint32_t n)
 
 		if((AverageStartF & 1) == 0)
 			AverageStartF |= 1;
-		//NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
-		//NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,frontt);
-		//NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
+		NRF_LOG_INFO("*temperature: %d, %d, %d, %d, %d\r\n",TempAverage,hightotal,lowtotal,retval,n);
+		NRF_LOG_INFO("*temperature: Aver <==0x%08x, 0x%08x==>, %d, %d\r\n",n,temp,reara,frontt);
+		NRF_LOG_INFO("*temperature: retval 0x%08x, %d\r\n",retval,retval);
 	}
 
 	return retval;

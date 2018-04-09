@@ -1484,10 +1484,10 @@
 #define SPI0_ADC_SCLK 	15		//18			//3
 #endif
 #ifndef SPI0_ADC_DIN
-#define SPI0_ADC_DIN 	16		//16			//28
+#define SPI0_ADC_DIN 	17		//16			//28
 #endif
 #ifndef SPI0_ADC_DOUT
-#define SPI0_ADC_DOUT 	17		//17			//4
+#define SPI0_ADC_DOUT 	16		//17			//4
 #endif
 #ifndef SPI0_ADC_CS
 #define SPI0_ADC_CS 	14		//15			//29
@@ -3118,7 +3118,7 @@
 #endif
 // <o> NRF_LOG_BACKEND_UART_TX_PIN - UART TX pin 
 #ifndef NRF_LOG_BACKEND_UART_TX_PIN
-#define NRF_LOG_BACKEND_UART_TX_PIN 6
+#define NRF_LOG_BACKEND_UART_TX_PIN 20			//원본 6
 #endif
 
 // <o> NRF_LOG_BACKEND_UART_BAUDRATE  - Default Baudrate
@@ -4105,7 +4105,7 @@
 // <e> SAADC_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SAADC_CONFIG_LOG_ENABLED
-#define SAADC_CONFIG_LOG_ENABLED 1		//원본 0
+#define SAADC_CONFIG_LOG_ENABLED 0		//원본 0
 #endif
 // <o> SAADC_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -4116,7 +4116,7 @@
 // <4=> Debug 
 
 #ifndef SAADC_CONFIG_LOG_LEVEL
-#define SAADC_CONFIG_LOG_LEVEL 1		//원본 3
+#define SAADC_CONFIG_LOG_LEVEL 3		//원본 3
 #endif
 
 // <o> SAADC_CONFIG_INFO_COLOR  - ANSI escape code prefix.
@@ -4309,7 +4309,7 @@
 // <e> TIMER_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef TIMER_CONFIG_LOG_ENABLED
-#define TIMER_CONFIG_LOG_ENABLED 0		//1		//원본 0
+#define TIMER_CONFIG_LOG_ENABLED 0		//원본 0
 #endif
 // <o> TIMER_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -5322,7 +5322,7 @@
 
 // <o> NRF_SDH_BLE_GAP_EVENT_LENGTH - The time set aside for this connection on every connection interval in 1.25 ms units. 
 #ifndef NRF_SDH_BLE_GAP_EVENT_LENGTH
-#define NRF_SDH_BLE_GAP_EVENT_LENGTH 5		//원본 3 <error> ble_gatt: sd_ble_gap_data_length_update () (request) on connection 0x0 returned unexpected value 0x13."
+#define NRF_SDH_BLE_GAP_EVENT_LENGTH 3		//원본 3 <error> ble_gatt: sd_ble_gap_data_length_update () (request) on connection 0x0 returned unexpected value 0x13."
 											// 수정하니 위의 에러가 사라짐
 #endif
 

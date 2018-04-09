@@ -192,11 +192,10 @@ static const uint8_t m_dac_length = sizeof(m_tx_dac_buf);        /**< Transfer l
 void spi0_event_handler(nrf_drv_spi_evt_t const * p_event,
                        void *                    p_context)
 {
-	NRF_LOG_INFO("SPI0_Transfer completed.");
 	if(p_event -> type == NRF_DRV_SPI_EVENT_DONE)
 	{
 		spi0_xfer_done = true;
-		NRF_LOG_INFO("SPI0_Transfer completed.");
+//		NRF_LOG_INFO("SPI0_Transfer completed.");
     	if (m_rx_adc_buf[0] != 0)
     	{
        		NRF_LOG_INFO(" SPI0_Received:");
@@ -300,9 +299,9 @@ void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
 			{
 					p_event->data.done.p_buffer[i] = 0;		//180402 음수가 나오면 0으로 변경				
 			}
-#if 0			
-//원본           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
-#endif		   
+			
+           NRF_LOG_INFO("%d\r\n", p_event->data.done.p_buffer[i]);
+	   
 		}
 		bytes_to_send = sizeof(p_event->data.done.p_buffer[i]);
 						adc_value = p_event->data.done.p_buffer[i];
@@ -959,11 +958,11 @@ void spi1_dac_cs0_init(void)
      spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
      spi1_config.mosi_pin = SPI1_DAC_SDI;
      spi1_config.sck_pin  = SPI1_DAC_SCLK;
-	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
+//	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));	
 // non-blocking에서 blocking으로 전환	
-//	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	 
+	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	 
 	 nrf_delay_ms(1);
- 	 APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));	 
+ 	 APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));	 
 	nrf_delay_ms(1);
 }
 
@@ -979,11 +978,11 @@ void spi1_dac_cs1_init(void)
      spi1_config.miso_pin = NRF_DRV_SPI_PIN_NOT_USED;
      spi1_config.mosi_pin = SPI1_DAC_SDI;
      spi1_config.sck_pin  = SPI1_DAC_SCLK;
-     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));
+//     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, spi1_event_handler, NULL));
 // non-blocking에서 blocking으로 전환
-//     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	
+    APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	
 	 nrf_delay_ms(1);	
- 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, m_rx_dac_buf, m_dac_length));
+ 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));
 	nrf_delay_ms(1);
 }
 
@@ -1046,7 +1045,7 @@ int main(void)
 	buttons_leds_init(&erase_bonds);
 
     ble_stack_init();
-    gap_params_init();
+	gap_params_init();
     gatt_init();
     services_init();
     advertising_init();
@@ -1056,6 +1055,7 @@ int main(void)
     data_len_ext_set(1);		//m_test_params.data_len_ext_enabled
     conn_evt_len_ext_set(1);		//m_test_params.conn_evt_len_ext_enabled
 //180321 DLE-E
+
 	
 //180315 SPI-S
 //h  nrf_drv_spi_config_t spi0_config = NRF_DRV_SPI_DEFAULT_CONFIG;
