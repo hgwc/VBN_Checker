@@ -218,6 +218,8 @@ void AD7190_ChannelSelect(unsigned short channel);
 
 void AD7190_MultiChannelSelect(unsigned short chan1, unsigned short chan2);
 
+void AD7190_4ChannelSelect(unsigned short chan1, unsigned short chan2, unsigned short chan3, unsigned short chan4);
+
 uint32_t AD7190_ChopEnable(unsigned char chop);
 
 void AD7190_RefDetEnable(unsigned char refdet);

@@ -48,8 +48,9 @@
  * This application uses the @ref srvlib_conn_params module.
  */
 
+#include "main.h"
 
-
+#if 0
 #include <stdint.h>
 #include <string.h>
 #include "nordic_common.h"
@@ -84,7 +85,6 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#include "AD7190.h"
 
 #define APP_BLE_CONN_CFG_TAG            1                                           /**< A tag identifying the SoftDevice BLE configuration. */
 
@@ -118,6 +118,10 @@
 
 #define NRF_BLE_GATT_MAX_MTU_SIZE		103			//원본에 업던 것을 추가함
 
+
+#include "AD7190.h"
+#include "bt_proc_cmd.h"
+
 //제어용 GPIO 설정 -S(18.04.02)
 #define NO2_PREHEAT		3
 #define SHDN						22
@@ -145,6 +149,50 @@ static ble_uuid_t m_adv_uuids[]          =                                      
 
 //180321 Data Length Extension-S
 #define L2CAP_HDR_LEN                   4                                               /**< L2CAP header length. */
+#endif
+
+uint16_t DAC_Value = 10000;
+uint16_t dac1;
+uint16_t dac2;
+char dac_value3 = '1';
+char dac_value4 = '0';
+
+const uint8_t LCcmd_len[] = {
+	0, /* DARD */
+	0, /* DARC */
+	0, /* DAST */
+	0, /* DASR */
+	0, /* ADSE */
+	0, /* ADmS */
+	0, /* ADnS */
+	0, /* ADKS */
+	0, /* RSNO */
+	0, /* RCNO */
+	0, /* RPNO */
+	0, /* RTAR */
+	0, /* RCWT */
+	0, /* RSP1 */
+	0, /* RSP2 */
+	0, /* WTAR */
+	0, /* WTRS */
+	0, /* WZER */
+	6, /* WSNO */
+	2, /* WPNO */
+	6, /* WCNO */
+	0, /* WHOL */
+	0, /* WHRS */
+	0, /* WSTR */
+	0, /* WSTO */
+	6, /* WSP1 */
+	6, /* WSP2 */
+#if (WEIGHSCALE == CRWS100)
+	4, /* WDSP */
+	0, /* WDED */
+	0, /* WMAX */
+	6, /* ITEM */
+#endif
+	0 /*"" */
+};
 
 static void conn_evt_len_ext_set(bool status)
 {
@@ -962,7 +1010,7 @@ void spi1_dac_cs0_init(void)
 // non-blocking에서 blocking으로 전환	
 	 APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	 
 	 nrf_delay_ms(1);
- 	 APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));	 
+// 	 APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));	 
 	nrf_delay_ms(1);
 }
 
@@ -982,7 +1030,7 @@ void spi1_dac_cs1_init(void)
 // non-blocking에서 blocking으로 전환
     APP_ERROR_CHECK(nrf_drv_spi_init(&spi1_dac, &spi1_config, NULL, NULL));	
 	 nrf_delay_ms(1);	
- 	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));
+//	APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, m_tx_dac_buf, m_dac_length, NULL, m_dac_length));
 	nrf_delay_ms(1);
 }
 
@@ -998,24 +1046,40 @@ void ADC_reinit(void)
 		return;
 #endif
 	}
-	AD7190_SetBridgePower(1);
-	AD7190_SetPower(1);							  //idle
-	AD7190_ChannelSelect(AD7190_CH_AIN3P_AINCOM); //AIN3, COM
-	AD7190_ChopEnable(1);						  //chop enable
-	//AD7190_RefDetEnable(1); //REFDET enable
-	AD7190_RefSelect(0);
-	AD7190_BufEnable(1);
-	AD7190_DatSta_Enable(0);
-	AD7190_Rej60Enable(1); //rej 60
-	//AD7190_RangeSetup(0, (unsigned char)CurrGain); //bipolar, 128 gain
-	AD7190_RangeSetup(0, 8);
+ 	AD7190_SetBridgePower(1);										// Bridge Down Switch On(connect)
+	AD7190_SetPower(1);							  						// idle 즉 power-down 모드가 아님
+
+#if 0
+AD7190_MultiChannelSelect(AD7190_CH_AIN1P_AINCOM | AD7190_CH_AIN2P_AINCOM, AD7190_CH_AIN3P_AINCOM | AD7190_CH_AIN4P_AINCOM );
+//AD7190_MultiChannelSelect(AD7190_CH_AIN3P_AINCOM,  AD7190_CH_AIN4P_AINCOM);
+#else
+AD7190_4ChannelSelect(AD7190_CH_AIN1P_AINCOM, AD7190_CH_AIN2P_AINCOM, AD7190_CH_AIN3P_AINCOM, AD7190_CH_AIN4P_AINCOM ); 	// AIN1, COM 각 채널을  pseudo differential mode 선택
+//	AD7190_ChannelSelect(AD7190_CH_AIN2P_AINCOM); 	// AIN2, COM
+//	AD7190_ChannelSelect(AD7190_CH_AIN3P_AINCOM); 	// AIN3, COM
+//	AD7190_ChannelSelect(AD7190_CH_AIN4P_AINCOM); 	// AIN4, COM
+#endif
+	
+//원본 	AD7190_ChopEnable(1);						  
+	AD7190_ChopEnable(0);						  						// chop disable
+// 	AD7190_RefDetEnable(1); //REFDET enable
+	
+//원본 	AD7190_RefSelect(0);
+	AD7190_RefSelect(1);													// EFIN2를 reference로 선택
+	AD7190_BufEnable(1);													// Buffer enable
+	AD7190_DatSta_Enable(0);											// DAT_STA disable
+	AD7190_Rej60Enable(1); 												// REJ60 enable
+	AD7190_RangeSetup(1, 7);											// Unipolar & Gain은 128
+	
 //원본 	ADI_SYNC_LOW;
-	nrf_delay_us(10);
+//	nrf_delay_us(10);
 //원본 	ADI_SYNC_HIGH;
+	
 	adcmd = AD7190_MODE_SEL(AD7190_MODE_CONT) |
 	        AD7190_MODE_CLKSRC(AD7190_CLK_INT) |
 	        AD7190_MODE_RATE(ConvRate);
-	AD7190_SetRegisterValue(AD7190_REG_MODE, adcmd, 3, 0); // CS is not modified.
+	AD7190_SetRegisterValue(AD7190_REG_MODE, adcmd, 3, 0); // Continuous Conversation Mode & Internal 4.92 MHz clock.
+																									// & Filter output data rate select bits.= 0x60(96)
+																									// Output Data Rate (50.05 Hz)= ( MCLK (4.92MHz) /024 ) / FS(0x60)
 }
 
 void 	device_init(void)
@@ -1026,6 +1090,514 @@ void 	device_init(void)
     spi1_dac_cs1_init();
 
 	ADC_reinit();
+}
+
+#define LCSTR_LEN 20
+
+uint16_t LCcnt = 0;
+uint16_t LCid = 0;
+char LCcmdStr[4];
+char LCresult[LCSTR_LEN];
+
+//char LCresult1[LCSTR_LEN];
+uint8_t LCcmdok = 0;
+uint16_t LClen = 0;
+
+
+bt_cmd_fet_t func_arry[REQ_CMDMAX] = {
+	{	REQ_DACRD, func_cmd_DARD},
+	{	REQ_DACRC, func_cmd_DARC},
+	{	REQ_DACSET, func_cmd_DAST},
+	{	REQ_DACSETRC, func_cmd_DASR},
+	{	REQ_ADCSET, func_cmd_ADSE},
+	{	REQ_ADmST, func_cmd_ADmS},
+	{	REQ_ADnST, func_cmd_ADnS},
+	{	REQ_ADKST, func_cmd_ADKS},
+	{	REQ_NO, NULL},
+	{	REQ_CODE, NULL},
+	{	REQ_QN, NULL},
+	{	REQ_CONTAINER, NULL},
+	{	REQ_WEIGHT, NULL},
+	{	REQ_READMIN, NULL},
+	{	REQ_READMAX, NULL},
+	{	REQ_CONTSET, NULL},
+	{	REQ_CONTRST, NULL},
+	{	REQ_ZEROSET, NULL},
+	{	REQ_CHGNO, NULL},
+	{	REQ_CHGQN, NULL},
+	{	REQ_CHGCODE, NULL},
+	{	REQ_SETHOLD, NULL},
+	{	REQ_RELHOLD, NULL},
+	{	REQ_START, NULL},
+	{	REQ_STOP, NULL},
+	{	REQ_CHGMIN, NULL},
+	{	REQ_CHGMAX, NULL},
+#if (WEIGHSCALE == CRWS100)
+	{	REQ_DISP, NULL},
+	{	REQ_DEND, NULL},
+	{	REQ_MAXSET, NULL},
+	{	INF_TEMP, NULL},
+#endif
+};
+const char *LCcommand[] = {
+	"DARD",
+	"DARC",
+	"DAST",
+	"DASR",
+	"ADSE",
+	"ADmS",
+	"ADnS",
+	"ADKS"
+	"RSNO",
+	"RCNO",
+	"RPNO",
+	"RTAR",
+	"RCWT",
+	"RSP1",
+	"RSP2",
+	"WTAR",
+	"WTRS",
+	"WZER",
+	"WSNO",
+	"WPNO",
+	"WCNO",
+	"WHOL",
+	"WHRS",
+	"WSTR",
+	"WSTO",
+	"WSP1",
+	"WSP2",
+#if (WEIGHSCALE == CRWS100)
+	"WDSP",
+	"WDED",
+	"WMAX",
+	"ITEM",
+#endif
+	""
+};
+
+void SendADCmResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 0x813500) / 0x7eaf00)) + 0.051 - 0.0009;
+//h 	I = (tmpData2 / 1.8) / (0.01 * 100) * 1000;
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000);
+	//uart1_printf("i: %f mA\r\n",I);
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendADCnResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 8404000)) / 8365900) + 0.012; //10
+	//tmpData2 = ((5*(tmpData1-0x813500)/0x7eaf00))+0.012; //10
+//h 	I = (tmpData2 * 1.98) / (10 * 100) * 1000; //10
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10
+	//uart1_printf("i: %f mA\r\n",I); //10
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendADCKResponse(LCcmd_e_type cmd)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	int tmpData;
+	double tmpData1;
+	double tmpData2;
+//h 	double I;
+	AD7190_WaitRdyGoLow();
+	tmpData1 = AD7190_GetRegisterValue(AD7190_REG_DATA, 3, 0);
+	nrf_delay_ms(1000);
+	tmpData2 = ((5 * (tmpData1 - 0x813500)) / 0x7eaf00) + 0.050; //10k
+//h 	I = tmpData2 / (10000 * 100) * 10000000;					 //10k
+	//uart1_printf("tmpData: %f mV\r",tmpData2*1000); //10k
+	//uart1_printf("i: %f uA\r\n",I); //10k
+	tmpData = (int)(tmpData2 * 10000);
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = (tmpData / 10000) % 10 + '0';
+	sendstr[i++] = (tmpData / 1000) % 10 + '0';
+	sendstr[i++] = (tmpData / 100) % 10 + '0';
+	sendstr[i++] = (tmpData / 10) % 10 + '0';
+	sendstr[i++] = tmpData % 10 + '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	uart1_printf("\r\n");
+}
+
+void SendSetcmdResponse(LCcmd_e_type cmd, char *val)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, j = 0, k = 0;
+	uint16_t crc3 = 0;
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	for (j = 0; j < 5; j++) {
+		sendstr[i++] = *val++;
+	}
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	nrf_delay_ms(8);
+}
+
+void SendReadcmdResponse(LCcmd_e_type cmd, char val1, char val2)
+{
+	char sendstr[20] = {
+		0,
+	};
+	int i = 0, k = 0;
+	uint16_t crc3 = 0;
+	sendstr[i++] = 'A';
+	sendstr[i++] = LCcommand[cmd][0];
+	sendstr[i++] = LCcommand[cmd][1];
+	sendstr[i++] = LCcommand[cmd][2];
+	sendstr[i++] = LCcommand[cmd][3];
+	for (k = 1; k < 5; k++) {
+		crc3 += sendstr[k];
+	}
+	sendstr[i++] = val1;
+	sendstr[i++] = val2;
+	sendstr[i++] = '0';
+	sendstr[i++] = '0';
+	sendstr[i++] = '0';
+	sendstr[i++] = (crc3 / 100) % 10 + '0';
+	sendstr[i++] = (crc3 / 10) % 10 + '0';
+	sendstr[i++] = crc3 % 10 + '0';
+	sendstr[i++] = 'B';
+	Serial1_PutStringSize(sendstr, i);
+	//uart1_printf("\rdac voltage= %c.%c V\r\n",val1,val2);
+	nrf_delay_ms(8);
+}
+
+void RcvCmd(void)
+{
+	uint8_t rxd1;
+//h 	char sign;
+	if (rx1_flag) {
+		rx1_flag = 0;
+		//rx3_enter--;
+		LCcmdok = 0;
+		LCcnt = 0;
+		LClen = 0;
+		
+//h 		uint8_t LCtail = 0;
+		//SerialPutChar1('[');
+		if (rx1_enter) {
+			//패킷이 정상적으로 들어오면 rx1_enter가 set되어진다
+			//rx1_enter--;
+			while ((rxd1 = GetByte1()) != 0xff) { //Queue가 끝나기 전까지 검사
+				//SerialPutChar1(rxd3);
+				if (rxd1 == 0x00) {
+					uart1_printf("*uart error 0x00\r\n");
+					LCcnt = 0;
+				}
+				switch (LCcnt) { //초기 LCcnt의 값은 0
+				case 0:
+					//LCid += (rxd1-'0') * 10;
+					//'0'은 asc2로 환산하면 0x30
+					// 1~9까지의 asc2는 0x31~0x39이므로
+					//0x30을 지우기 위하여 -'0'을 수행한다
+					//10의 자리수를 나타내기 위해 10을 곱한다
+					break;
+				case 1:
+					LCcmdStr[0] = rxd1; //명령어를 저장한다
+					break;
+				//LCid += rxd1-'0';
+				//break;
+				case 2:
+					LCcmdStr[1] = rxd1;
+					break;
+				case 3:
+					LCcmdStr[2] = rxd1;
+					break;
+				case 4:
+					LCcmdStr[3] = rxd1;
+					break;
+				default:
+					if (rxd1 == 'B') { //패킷의  Tail부분에 도달했으면
+						LCcmdok = 1;	 //LCcmdok를 1로 set해 패킷전송이 끝났음을 알린다
+						if (rx1_enter)   //패킷이 정상적으로 들어온것이 확인되면
+							rx1_enter--; //rxX_enter를 0으로 줄여 reset시킨다
+					}
+					else
+						LCresult[LClen++] = rxd1; //패킷의 Tail부분에 도달하지 않았으면
+					//LCresult배열에 패킷을 저장시킨다
+					//패킷의 data부분
+					break;
+				}
+				LCcnt++; //LCcnt를 1씩 증가시킨다
+				if (LCcnt >= 0xffff) {
+					uart1_printf("*LCcnt over %d\r\n", LCcnt);
+					LCcnt = 0;
+				}
+				if (LCcmdok) { //패킷전송이 완료되면
+					if ((strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) && (LClen == LCcmd_len[REQ_DACSET])) {
+						//LCcmdStr과 LCcommand를 서로 비교한다
+						//uart1_printf("*cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0; //if가 true라면 LCcmdok은 reset
+						LCcnt = 0;   //LCcnt도 reset된다
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) && (LClen == LCcmd_len[REQ_DACRD])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_DACRC], 4) == 0) && (LClen == LCcmd_len[REQ_DACRC])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					else if ((strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) && (LClen == LCcmd_len[REQ_ADCSET])) {
+						//uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						//PafiEventSet(EVENT_ZEROSET);
+						//break;
+					}
+					/*else if((strncmp(LCcmdStr,LCcommand[REQ_MAXSET],4) == 0) && (LClen == LCcmd_len[REQ_MAXSET]))
+					{
+						uart1_printf("cmd ok! len:%d, %s\r\n",LClen, LCcmdStr);
+						LCcmdok = 0;
+						LCcnt = 0;
+						PafiEventSet(EVENT_MAXSET);
+						//break;
+					}*/
+					else
+						LClen = 0; //if가 false라면 LClen을 0으로 초기화
+					//uart1_printf("cmd not ok! len:%d, %s\r\n",LClen, LCcmdStr);
+					//////////////////////////////////////////////////////////
+					LCcmdok = 0; //LCcmdok초기화
+					LCcnt = 0;   //LCcnt초기화
+					if (rx1_enter)
+						rx1_enter--; //rx3_enter초기화
+				}
+				if (LCcnt > 50)
+					uart1_printf("*LCcnt Overflow! %d, %s\r\n", LCcnt, LCcmdStr);
+			}
+			//SerialPutChar1(']');
+//h			uint16_t dac_value1 = 1;
+//h			uint16_t dac_value2 = 0;
+//h			uint16_t CRC7 = 0;
+			uint16_t CRC6 = 0;
+			uint16_t CRC5 = 0;
+			uint16_t CRC4 = 0;
+//h			uint16_t CRC3 = 0;
+//h			uint16_t CRC2 = 0;
+			uint16_t CRC1 = 0;
+			uint16_t CRC0 = 0;
+			uint16_t ADC_Value = 0;
+			if (strncmp(LCcmdStr, LCcommand[REQ_DACSET], 4) == 0) {
+				// voltage데이터 수신,data비교
+				DAC_Value = 0;
+				DAC_Value += (LCresult[0] - '0') * 10000;
+				DAC_Value += (LCresult[1] - '0') * 1000;
+				DAC_Value += (LCresult[2] - '0') * 100;
+				DAC_Value += (LCresult[3] - '0') * 10;
+				DAC_Value += (LCresult[4] - '0');
+				CRC0 += (LCresult[5] - '0') * 100;
+				CRC0 += (LCresult[6] - '0') * 10;
+				CRC0 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC1 += LCcmdStr[i];
+				}
+				if (CRC1 == CRC0) {
+					//uart1_printf("cmd OK\r\n");
+					DAC_Value = DAC_Value / 1000;
+					//DAC_Value = (int)(1000000*DAC_Value)/38.147;
+					//  uart1_printf("Setting_Voltage: %c.%c V\n\r",LCresult[0],LCresult[1]);
+					dac1 = ((voltage_value[DAC_Value] - 32768) & 0xff00) >> 8;
+					dac2 = (voltage_value[DAC_Value] - 32768) & 0xff;
+					uint16_t dac3[3] = {0x00, dac1, dac2};
+//					dac_datas(dac3);
+   					spi1_dac_cs0_init();
+					uint8_t value[6];
+					uint8_t rcv_value[6];
+					for(char i = 0; i < 3; i++)
+					{
+						value[i*2] = dac3[i];
+						value[(i*2)+1] = dac3[i] >> 8;
+					}	
+ 					APP_ERROR_CHECK(nrf_drv_spi_transfer(&spi1_dac, value, 6, rcv_value, 7));
+	
+					SendSetcmdResponse(REQ_DACSETRC, LCresult);
+					dac_value3 = LCresult[0];
+					dac_value4 = LCresult[1];
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			if (strncmp(LCcmdStr, LCcommand[REQ_DACRD], 4) == 0) {
+				// voltage데이터 수신,data비교
+				DAC_Value = 0;
+				DAC_Value += (LCresult[0] - '0') * 10000;
+				DAC_Value += (LCresult[1] - '0') * 1000;
+				DAC_Value += (LCresult[2] - '0') * 100;
+				DAC_Value += (LCresult[3] - '0') * 10;
+				DAC_Value += (LCresult[4] - '0');
+				if (DAC_Value != 65535) {
+					uart1_printf("packet error(data)\r\n");
+					rx1_enter = 0;
+				}
+				CRC4 += (LCresult[5] - '0') * 100;
+				CRC4 += (LCresult[6] - '0') * 10;
+				CRC4 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC5 += LCcmdStr[i];
+				}
+				if (CRC5 == CRC4) {
+					//uart1_printf("cmd OK\r\n");
+					SendReadcmdResponse(REQ_DACRC, dac_value3, dac_value4);
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			if (strncmp(LCcmdStr, LCcommand[REQ_ADCSET], 4) == 0) {
+				// voltage데이터 수신,data비교
+				ADC_Value = 0;
+				ADC_Value += (LCresult[0] - '0') * 10000;
+				ADC_Value += (LCresult[1] - '0') * 1000;
+				ADC_Value += (LCresult[2] - '0') * 100;
+				ADC_Value += (LCresult[3] - '0') * 10;
+				ADC_Value += (LCresult[4] - '0');
+				if (ADC_Value > 2) {
+					uart1_printf("packet error(data)\r\n");
+					rx1_enter = 0;
+				}
+				CRC5 += (LCresult[5] - '0') * 100;
+				CRC5 += (LCresult[6] - '0') * 10;
+				CRC5 += (LCresult[7] - '0');
+				for (int i = 0; i < 4; i++) {
+					CRC6 += LCcmdStr[i];
+				}
+				if (CRC6 == CRC5) {
+					//uart1_printf("cmd OK\r\n");
+					if (ADC_Value == 0) {
+						//uart1_printf("shunt resistor: 10m ohm\r\n");
+						while (1) {
+							SendADCmResponse(REQ_ADmST);
+							RcvCmd();
+						}
+					}
+					else if (ADC_Value == 1) {
+						//uart1_printf("shunt resistor: 10 ohm\r\n");
+						while (1) {
+							SendADCnResponse(REQ_ADnST);
+							RcvCmd();
+						}
+					}
+					else if (ADC_Value == 2) {
+						//uart1_printf("shunt resistor: 10K ohm\r\n");
+						while (1) {
+							SendADCKResponse(REQ_ADKST);
+							RcvCmd();
+						}
+					}
+				}
+				else {
+					uart1_printf("cmd error\r\n");
+				}
+			}
+			////////////////////////////////////////////////////////////////////////////////////
+			//uart1_printf("*TempValue: %d, %03.02f\r\n",TempValue, (float)((TempValue/100)+((TempValue%100)*0.01)));
+		}
+	}
 }
 
 /**@brief Application main function.
