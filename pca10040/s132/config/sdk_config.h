@@ -4207,7 +4207,7 @@
 // <e> SPI_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
 #ifndef SPI_CONFIG_LOG_ENABLED
-#define SPI_CONFIG_LOG_ENABLED 1		//원본 0
+#define SPI_CONFIG_LOG_ENABLED 0
 #endif
 // <o> SPI_CONFIG_LOG_LEVEL  - Default Severity level
  
@@ -5322,7 +5322,7 @@
 
 // <o> NRF_SDH_BLE_GAP_EVENT_LENGTH - The time set aside for this connection on every connection interval in 1.25 ms units. 
 #ifndef NRF_SDH_BLE_GAP_EVENT_LENGTH
-#define NRF_SDH_BLE_GAP_EVENT_LENGTH 3		//원본 3 <error> ble_gatt: sd_ble_gap_data_length_update () (request) on connection 0x0 returned unexpected value 0x13."
+#define NRF_SDH_BLE_GAP_EVENT_LENGTH 5		//원본 3 <error> ble_gatt: sd_ble_gap_data_length_update () (request) on connection 0x0 returned unexpected value 0x13."
 											// 수정하니 위의 에러가 사라짐
 #endif
 

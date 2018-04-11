@@ -289,17 +289,14 @@ NRF_LOG_INFO("\r\nAD7190_Reset!");
 	nrf_delay_ms(2);
 #if 1
 regVal = AD7190_GetRegisterValue(AD7190_REG_CONF, 3, 1);
-NRF_LOG_INFO("Confiuration( 0x000117) = %x\n", regVal);
-nrf_delay_ms(100);
+NRF_LOG_INFO("Confiuration Initial Value( 0x000117) = %x\n", regVal);
+nrf_delay_ms(1);
 regVal = AD7190_GetRegisterValue(AD7190_REG_MODE, 3, 1);
-NRF_LOG_INFO("Mode( 0x080060) = %x\n", regVal);
-nrf_delay_ms(100);
+NRF_LOG_INFO("Mode Initial Value( 0x080060) = %x\n", regVal);
+nrf_delay_ms(1);
 regVal = AD7190_GetRegisterValue(AD7190_REG_OFFSET, 3, 1);
-NRF_LOG_INFO("Offset(0x800000) = %x\n", regVal);
-nrf_delay_ms(100);
-regVal = AD7190_GetRegisterValue(AD7190_REG_STAT, 3, 1);
-NRF_LOG_INFO("Stat( 0x80) = %x\n", regVal);
-nrf_delay_ms(100);
+NRF_LOG_INFO("Offset Initial Value(0x800000) = %x\n", regVal);
+nrf_delay_ms(1);
 #endif	
 #endif
 }
